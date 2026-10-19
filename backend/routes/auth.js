@@ -1,0 +1,73 @@
+import { Router } from 'express';
+import bcrypt from 'bcryptjs';
+import { z } from 'zod';
+import { User } from '../models/index.js';
+import { HttpError, ok, validate, signToken, authRequired, authLimiter } from '../middleware/index.js';
+
+const signupBody = z
+  .object({
+    name: z.string().trim().min(1).max(40),
+    email: z.string().trim().toLowerCase().email(),
+    password: z.string().min(8).max(100),
+  })
+  .strict();
+
+const loginBody = z
+  .object({ email: z.string().trim().toLowerCase().email(), password: z.string().min(1).max(100) })
+  .strict();
+
+const publicUser = (u) => ({ id: String(u._id), name: u.name, email: u.email });
+
+export default function authRoutes(config) {
+  const r = Router();
+  const cookieOpts = {
+    httpOnly: true,
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+    sameSite: config.isProd ? 'none' : 'lax',
+    secure: config.isProd,
+  };
+
+  r.post('/signup', authLimiter, validate({ body: signupBody }), async (req, res, next) => {
+    try {
+      const { name, email, password } = req.body;
+      if (await User.exists({ email })) {
+        throw new HttpError(409, 'EMAIL_TAKEN', 'An account with that email already exists.');
+      }
+      const user = await User.create({ name, email, passwordHash: await bcrypt.hash(password, 10) });
+      res.cookie('token', signToken(user._id, config.JWT_SECRET), cookieOpts);
+      ok(req, res, publicUser(user), 201);
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  r.post('/login', authLimiter, validate({ body: loginBody }), async (req, res, next) => {
+    try {
+      const { email, password } = req.body;
+      const user = await User.findOne({ email });
+      const good = user && (await bcrypt.compare(password, user.passwordHash));
+      if (!good) throw new HttpError(401, 'BAD_LOGIN', 'Wrong email or password');
+      res.cookie('token', signToken(user._id, config.JWT_SECRET), cookieOpts);
+      ok(req, res, publicUser(user));
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  r.post('/logout', (req, res) => {
+    res.clearCookie('token', { ...cookieOpts, maxAge: undefined });
+    ok(req, res, { loggedOut: true });
+  });
+
+  r.get('/me', authRequired(config), async (req, res, next) => {
+    try {
+      const user = await User.findById(req.userId);
+      if (!user) throw new HttpError(401, 'UNAUTHENTICATED', 'Please log in.');
+      ok(req, res, publicUser(user));
+    } catch (e) {
+      next(e);
+    }
+  });
+
+  return r;
+}
