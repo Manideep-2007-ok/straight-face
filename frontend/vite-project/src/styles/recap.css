@@ -1,0 +1,15 @@
+.recap { max-width: 880px; margin: 0 auto; padding: var(--s6); display: grid; gap: var(--s6); }
+.recap h2 { font-size: 1.375rem; margin-bottom: var(--s3); }
+.past { display: flex; gap: var(--s2); flex-wrap: wrap; }
+.chip.on { background: var(--glow); color: var(--on-glow); border-color: transparent; }
+.sample-note { padding: var(--s3) var(--s4); border: 1px dashed var(--glow); border-radius: var(--radius); color: var(--glow); }
+.heat { margin: 0; position: relative; }
+.heat svg { width: 100%; height: 84px; display: block; border-radius: var(--radius); }
+.flags { position: relative; height: 32px; }
+.flag { position: absolute; transform: translateX(-50%); top: 4px; min-height: 24px; padding: 0 var(--s2); font-size: 0.75rem; line-height: 24px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--text); text-decoration: none; }
+.heat figcaption { font-size: 0.875rem; margin-top: var(--s1); }
+.awards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--s3); }
+.awards li { padding: var(--s4); display: grid; gap: var(--s1); }
+.awards strong { font: 700 1.25rem var(--font-display); }
+.plain { margin: 0; padding-left: var(--s6); display: grid; gap: var(--s2); }
+@media (max-width: 767px) { .recap { padding: var(--s3); } }
