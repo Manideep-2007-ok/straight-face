@@ -36,7 +36,7 @@ Friends and classmates who watch things together while apart.
 | Don't Laugh round: calibrate, 5 s countdown, live, winner | Server rules fully tested; UI built, **not yet tested with real faces** |
 | Manual emoji and face-triggered emoji floating over the video | Built |
 | Reaction Radar heat strip, peaks, awards, past parties, sample party | Built, tested with seeded data |
-| Video queue with voting | **Not built** (cut by the plan's cut order) |
+| Video queue with voting (most votes plays next) | Built, tested live |
 | Custom-trained emotion model (Part B) | **Not part of this build** |
 | Custom glass control bar | Not built. The player uses YouTube's own controls, and every play, pause and seek is still synced. |
 
@@ -100,7 +100,7 @@ Measured on this machine against a local server, so they show the code is not th
 |---|---|
 | Load test, 4 clients, 20 events/s for 30 s (`scripts/loadtest.js`) | 596 events, 0 rejected, fan-out p50 1 ms, p95 1 ms, all 4 clients stayed connected |
 | `GET /health` locally, 60 requests | p50 1.3 ms, p95 1.9 ms |
-| Live end-to-end check (`scripts/e2e.mjs`) | 32 checks pass: auth, room cap, sync, cooldown, chat, late join, signalling relay, full game round |
+| Live end-to-end check (`scripts/e2e.mjs`) | 36 checks pass: auth, room cap, sync, cooldown, chat, late join, signalling relay, full game round, queue and voting |
 
 _To fill in after deploying: the same load test and REST latency against the Render URL, and a note on cold start (about 50 s on the free tier)._
 
