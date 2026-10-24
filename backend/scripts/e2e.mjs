@@ -149,5 +149,16 @@ await wait(300);
 const final = states.at(-1);
 check('last straight face (player 2) wins', final.phase === 'ended' && final.winners[0] === users[2].body.data.id, JSON.stringify(final.winners));
 
+// ---- Queue and voting ----
+const qs = got(gs[1], 'queue:state');
+check('add to queue', (await gs[0].emitWithAck('queue:add', { videoId: 'aaaaaaaaaaa' })).ok === true);
+check('everyone sees the queue', (await qs).length === 1);
+check('duplicate video is refused', (await gs[1].emitWithAck('queue:add', { videoId: 'aaaaaaaaaaa' })).error === 'ALREADY_QUEUED');
+await gs[1].emitWithAck('queue:add', { videoId: 'bbbbbbbbbbb' });
+await gs[2].emitWithAck('queue:vote', { id: (await new Promise((r) => { gs[2].once('queue:state', (x) => r(x.find((i) => i.videoId === 'bbbbbbbbbbb').id)); gs[2].emit('queue:vote', { id: 'zz' }); gs[0].emitWithAck('queue:add', { videoId: 'ccccccccccc' }); })) });
+const nextP = got(gs[0], 'play:state');
+const nx = await gs[1].emitWithAck('queue:next');
+check('play top-voted video for everyone', nx.ok === true && (await nextP).videoId === nx.videoId, nx.videoId);
+
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll checks passed');
 process.exit(failed ? 1 : 0);
