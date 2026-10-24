@@ -5,6 +5,7 @@ import { verifyToken } from '../middleware/index.js';
 import { initialPlayback, expectedPosition, applyAction } from '../logic/playbackState.js';
 import { RateBucket } from '../logic/rateBucket.js';
 import * as dl from '../logic/dontLaugh.js';
+import * as qu from '../logic/queue.js';
 import { schemas } from './schemas.js';
 
 const FLUSH_MS = 3000;
@@ -20,7 +21,7 @@ export function attachSockets(httpServer, config, registry) {
   const live = new Map();
   const getLive = (code) => {
     if (!live.has(code)) {
-      live.set(code, { playback: initialPlayback(null), toggles: new Map(), sessionId: null, chat: [], recent: [], round: dl.idleRound(), events: [], radar: new Map(), lastLive: 0, roundStartedAt: null, roundTimer: null, thresholds: {} });
+      live.set(code, { playback: initialPlayback(null), toggles: new Map(), sessionId: null, chat: [], recent: [], round: dl.idleRound(), queue: [], events: [], radar: new Map(), lastLive: 0, roundStartedAt: null, roundTimer: null, thresholds: {} });
     }
     return live.get(code);
   };
@@ -159,6 +160,7 @@ export function attachSockets(httpServer, config, registry) {
         members: members(),
         chat: L.recent.slice(-50),
         round: dl.publicView(L.round),
+        queue: qu.publicQueue(L.queue),
       });
     });
 
@@ -321,6 +323,46 @@ export function attachSockets(httpServer, config, registry) {
         io.to(code).emit('radar:live', { level });
       }
       reply({ ok: true });
+    });
+
+    const broadcastQueue = () => io.to(code).emit('queue:state', qu.publicQueue(getLive(code).queue));
+
+    on('queue:add', ({ videoId, title }, reply) => {
+      if (!needRoom(reply)) return;
+      const L = getLive(code);
+      const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+      const r = qu.addItem(L.queue, { videoId, title, userId: socket.user.userId, name: socket.user.name }, id);
+      if (r.error) return reply({ error: r.error });
+      L.queue = r.queue;
+      broadcastQueue();
+      reply({ ok: true });
+    });
+
+    on('queue:vote', ({ id }, reply) => {
+      if (!needRoom(reply)) return;
+      const L = getLive(code);
+      const r = qu.toggleVote(L.queue, id, socket.user.userId);
+      if (r.error) return reply({ error: r.error });
+      L.queue = r.queue;
+      broadcastQueue();
+      reply({ ok: true });
+    });
+
+    // Play the top-voted video for everyone.
+    on('queue:next', (_p, reply) => {
+      if (!needRoom(reply)) return;
+      const L = getLive(code);
+      const { queue, next } = qu.popNext(L.queue);
+      if (!next) return reply({ error: 'EMPTY' });
+      L.queue = queue;
+      const now = Date.now();
+      const r = applyAction(L.playback, { kind: 'set', status: 'playing', position: 0, videoId: next.videoId }, { userId: socket.user.userId, name: socket.user.name, now, lastToggleAt: 0 });
+      if (r.accepted) {
+        L.playback = r.state;
+        io.to(code).emit('play:state', L.playback);
+      }
+      broadcastQueue();
+      reply({ ok: true, videoId: next.videoId });
     });
 
     // Relay only to a member of the same room.

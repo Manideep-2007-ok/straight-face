@@ -26,6 +26,9 @@ export const schemas = {
   'dl:cancel': z.any(),
   'react:emoji': z.object({ emoji: z.enum(['😂', '😄', '😮', '❤️', '👏', '🔥', '😱', '💀']), auto: z.boolean().optional(), strength: z.number().min(0).max(1).optional() }).strict(),
   'radar:sample': z.object({ t: z.number().min(0).max(86400), smile: z.number().min(0).max(1), surprise: z.number().min(0).max(1) }).strict(),
+  'queue:add': z.object({ videoId: videoId, title: z.string().trim().max(120).optional() }).strict(),
+  'queue:vote': z.object({ id: z.string().min(1).max(40) }).strict(),
+  'queue:next': z.any(),
   'chat:send': z.object({ text: z.string().trim().min(1).max(500) }).strict(),
   'rtc:signal': z
     .object({ to: z.string().min(1).max(40), type: z.enum(['offer', 'answer', 'ice']), payload: z.any() })
