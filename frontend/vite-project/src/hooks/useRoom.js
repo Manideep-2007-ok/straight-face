@@ -15,6 +15,7 @@ export function useRoom(code) {
   const [playback, setPlayback] = useState(null);
   const [members, setMembers] = useState([]);
   const [chat, setChat] = useState([]);
+  const [queue, setQueue] = useState([]);
   const [level, setLevel] = useState(0);
   const [round, setRound] = useState({ phase: 'idle', players: [], winners: [] });
 
@@ -47,6 +48,7 @@ export function useRoom(code) {
       setMembers(r.members);
       setChat(r.chat);
       if (r.round) setRound(r.round);
+      if (r.queue) setQueue(r.queue);
       setStatus('joined');
     }
 
@@ -62,6 +64,7 @@ export function useRoom(code) {
     socket.on('room:members', setMembers);
     socket.on('play:state', setPlayback);
     socket.on('dl:state', setRound);
+    socket.on('queue:state', setQueue);
     socket.on('radar:live', (r) => setLevel(r.level));
     socket.on('chat:new', (m) => setChat((c) => [...c.slice(-199), m]));
 
@@ -86,6 +89,7 @@ export function useRoom(code) {
     members,
     chat,
     round,
+    queue,
     level,
     emit,
     serverNow,

@@ -88,6 +88,16 @@ export default function Room() {
     setLink('');
   }
 
+  async function addToQueue() {
+    const id = parseYouTubeId(link);
+    if (!id) return setLinkError('That does not look like a YouTube link. Paste the video address.');
+    setLinkError('');
+    const r = await room.emit('queue:add', { videoId: id });
+    if (r?.error === 'ALREADY_QUEUED') return setLinkError('That video is already in the queue.');
+    if (r?.error === 'QUEUE_FULL') return setLinkError('The queue is full (20 videos).');
+    setLink('');
+  }
+
   function send(e) {
     e.preventDefault();
     if (!text.trim()) return;
@@ -171,8 +181,30 @@ export default function Room() {
           <label htmlFor="yt" className="sr-only">YouTube link</label>
           <input id="yt" className="grow" value={link} onChange={(e) => setLink(e.target.value)} placeholder="Paste a YouTube link" />
           <button className="btn">Play this video</button>
+          <button type="button" className="btn btn-ghost" onClick={addToQueue}>Add to queue</button>
         </form>
         {linkError && <p className="error-text" role="alert">{linkError}</p>}
+
+        <section className="queue" aria-label="Up next">
+          <div className="row" style={{ justifyContent: 'space-between' }}>
+            <h2 style={{ fontSize: '1.0625rem' }}>Up next</h2>
+            {room.queue.length > 0 && <button className="btn btn-ghost" onClick={() => room.emit('queue:next')}>Play the top video</button>}
+          </div>
+          {room.queue.length === 0 && <p className="muted">Nothing queued. Add a video, then everyone votes for what plays next.</p>}
+          <ul className="queue-list">
+            {room.queue.map((q) => {
+              const voted = q.voters.includes(room.me.userId);
+              return (
+                <li key={q.id}>
+                  <span className="grow-text">{q.title} <span className="muted">added by {q.addedByName}</span></span>
+                  <button className="chip" aria-pressed={voted} onClick={() => room.emit('queue:vote', { id: q.id })} aria-label={`${voted ? 'Remove your vote for' : 'Vote for'} ${q.title}`}>
+                    {voted ? '▲ voted' : '△ vote'} · {q.votes}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
 
         <ul className="tiles" aria-label="People in the room">
           {room.members.map((m) => {

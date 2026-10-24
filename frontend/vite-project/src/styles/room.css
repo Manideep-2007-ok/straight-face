@@ -79,3 +79,10 @@
 .emoji-row { gap: var(--s1); }
 .emoji-btn { padding: 0; width: 44px; font-size: 1.25rem; }
 .privacy-note { font-size: 0.8125rem; }
+
+/* Queue */
+.queue { display: grid; gap: var(--s2); }
+.queue-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--s2); }
+.queue-list li { display: flex; gap: var(--s3); align-items: center; padding: var(--s2) var(--s3); border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); }
+.queue-list .grow-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.chip[aria-pressed='true'] { background: var(--glow); color: var(--on-glow); }
