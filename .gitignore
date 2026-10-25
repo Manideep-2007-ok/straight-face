@@ -4,3 +4,7 @@ node_modules/
 dist/
 .vercel/
 .DS_Store
+
+model/.venv/
+model/data/
+__pycache__/
