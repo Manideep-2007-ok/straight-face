@@ -3,7 +3,7 @@ import { scoresFromBlendshapes, makeEma, FPS } from './face.js';
 // EmotionEngine "mediapipe": pretrained MediaPipe FaceLandmarker. Nothing here is trained by this project.
 // start(videoEl, onFrame) -> stop(). onFrame({ smile, surprise, faceFound }) runs about 8 times a second.
 let landmarkerPromise;
-async function getLandmarker() {
+export async function getLandmarker() {
   if (!landmarkerPromise) {
     landmarkerPromise = (async () => {
       const { FaceLandmarker, FilesetResolver } = await import('@mediapipe/tasks-vision');

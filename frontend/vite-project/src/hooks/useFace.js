@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { mediapipeEngine } from '../lib/mediapipeEngine.js';
+import { customEngine } from '../lib/customEngine.js';
 
-// "custom" is the Part B model; until it exists the app always uses MediaPipe.
-const ENGINES = { mediapipe: mediapipeEngine };
+// "custom" is the CNN trained in /model (set VITE_EMOTION_ENGINE=custom). MediaPipe is the default.
+const ENGINES = { mediapipe: mediapipeEngine, custom: customEngine };
 export const engine = ENGINES[import.meta.env.VITE_EMOTION_ENGINE] || mediapipeEngine;
 
 // Reads the local camera in this browser only. Calls onFrame({smile,surprise,faceFound}) ~8x/s while active.
