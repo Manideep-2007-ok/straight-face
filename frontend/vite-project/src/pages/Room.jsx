@@ -143,6 +143,25 @@ export default function Room() {
         <FloatingEmoji items={floaters} />
         </div>
 
+        <ul className="tiles" aria-label="People in the room">
+          {room.members.map((m) => {
+            const isMe = m.userId === room.me.userId;
+            const rp = room.round.players?.find((p) => p.userId === m.userId);
+            return (
+              <Tile
+                key={m.userId}
+                name={m.name}
+                isMe={isMe}
+                stream={isMe ? rtc.localStream : rtc.remote[m.userId]?.stream}
+                state={rtc.remote[m.userId]?.state}
+                camOff={isMe && !rtc.camOn}
+                micOff={isMe && !rtc.micOn}
+                out={rp ? !rp.alive : false}
+              />
+            );
+          })}
+        </ul>
+
         <DontLaugh
           round={room.round}
           me={room.me}
@@ -207,24 +226,6 @@ export default function Room() {
           </ul>
         </section>
 
-        <ul className="tiles" aria-label="People in the room">
-          {room.members.map((m) => {
-            const isMe = m.userId === room.me.userId;
-            const rp = room.round.players?.find((p) => p.userId === m.userId);
-            return (
-              <Tile
-                key={m.userId}
-                name={m.name}
-                isMe={isMe}
-                stream={isMe ? rtc.localStream : rtc.remote[m.userId]?.stream}
-                state={rtc.remote[m.userId]?.state}
-                camOff={isMe && !rtc.camOn}
-                micOff={isMe && !rtc.micOn}
-                out={rp ? !rp.alive : false}
-              />
-            );
-          })}
-        </ul>
       </section>
 
       <aside className="chat glass" aria-label="Chat">
