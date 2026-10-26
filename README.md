@@ -31,13 +31,13 @@ Friends and classmates who watch things together while apart.
 | Sign up, log in, create room with a 6-letter code, join by code or link, max 4 | Built, tested live |
 | Synced YouTube playback, anyone can control, late joiners catch up, drift correction | Built, tested live |
 | Chat stamped with video time; hides later messages after a rewind | Built |
-| Voice and video mesh, mic and camera toggles, speaker ring, no-camera fallback | Built, **not yet tested between two real devices** |
-| Face reading (smile, surprise) with per-person calibration | Built, model and wasm load verified; **not yet tested on a live face** |
-| Don't Laugh round: calibrate, 5 s countdown, live, winner | Server rules fully tested; UI built, **not yet tested with real faces** |
+| Voice and video mesh, mic and camera toggles, speaker ring, no-camera fallback | Built. Tested between two real browsers on one machine with fake cameras (`tests/browser/webrtc.mjs`, 36 of 37 runs connected). **Not yet tested on two physical devices or across networks.** |
+| Face reading (smile, surprise) with per-person calibration | Built. Tested on fake webcam video of FER2013 faces. **Not yet tested on a live person.** |
+| Don't Laugh round: calibrate, 5 s countdown, live, winner | Server rules fully tested. Played end to end in two real browsers with fake face videos: the smiling player was marked out and the other won. **Not yet played by real people.** |
 | Manual emoji and face-triggered emoji floating over the video | Built |
 | Reaction Radar heat strip, peaks, awards, past parties, sample party | Built, tested with seeded data |
 | Video queue with voting (most votes plays next) | Built, tested live |
-| Custom-trained emotion model (Part B) | **Not part of this build** |
+| Custom-trained emotion model (Part B) | See the model section below |
 | Custom glass control bar | Not built. The player uses YouTube's own controls, and every play, pause and seek is still synced. |
 
 ## What is pretrained and what is trained
@@ -104,12 +104,19 @@ Measured on this machine against a local server, so they show the code is not th
 
 _To fill in after deploying: the same load test and REST latency against the Render URL, and a note on cold start (about 50 s on the free tier)._
 
+## Known bugs found by testing, and fixed
+
+These were found by running the app, not by reading it: the camera request was cancelled by its own state change (nobody's camera would have started in a real browser), call setup lost early network candidates, two simultaneous offers left one side with no ICE candidates (fixed by letting only one side of each pair make offers), a finished video restarted for everyone, and the room page overflowed on phones.
+
 ## Tests
+
 
 ```bash
 cd backend && npm test             # unit tests (logic, schemas, registry)
 cd backend && node scripts/e2e.mjs # live check, needs the server running and Atlas
 cd frontend/vite-project && npm test
+# two-browser call test, needs Playwright and a Chromium binary (see the header of the file)
+PLAYWRIGHT_FROM=/dir/with/node_modules/ CHROMIUM=/usr/bin/chromium node tests/browser/webrtc.mjs ./out
 ```
 
 ## Local setup
