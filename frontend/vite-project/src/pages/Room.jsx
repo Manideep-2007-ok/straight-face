@@ -7,7 +7,7 @@ import Tile from '../components/Tile.jsx';
 import DontLaugh from '../components/DontLaugh.jsx';
 import { FloatingEmoji, FaceReactions, EMOJIS, useFloaters } from '../components/Reactions.jsx';
 import SyncedPlayer from '../components/SyncedPlayer.jsx';
-import { parseYouTubeId } from '../lib/youtube.js';
+import { parseYouTubeId, fetchTitle } from '../lib/youtube.js';
 import { visibleMessages } from '../lib/sync.js';
 import '../styles/room.css';
 
@@ -92,7 +92,8 @@ export default function Room() {
     const id = parseYouTubeId(link);
     if (!id) return setLinkError('That does not look like a YouTube link. Paste the video address.');
     setLinkError('');
-    const r = await room.emit('queue:add', { videoId: id });
+    const title = await fetchTitle(id);
+    const r = await room.emit('queue:add', { videoId: id, ...(title ? { title } : {}) });
     if (r?.error === 'ALREADY_QUEUED') return setLinkError('That video is already in the queue.');
     if (r?.error === 'QUEUE_FULL') return setLinkError('The queue is full (20 videos).');
     setLink('');

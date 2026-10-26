@@ -42,3 +42,15 @@ export function loadYouTubeApi() {
   }
   return apiPromise;
 }
+
+// Best-effort title lookup through YouTube's public oEmbed endpoint. Returns undefined if it fails.
+export async function fetchTitle(id) {
+  try {
+    const r = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${id}`)}&format=json`);
+    if (!r.ok) return undefined;
+    const t = (await r.json()).title;
+    return typeof t === 'string' ? t.slice(0, 120) : undefined;
+  } catch {
+    return undefined;
+  }
+}
