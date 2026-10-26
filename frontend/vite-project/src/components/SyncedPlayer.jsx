@@ -18,6 +18,7 @@ export default function SyncedPlayer({ playback, serverNow, started, onSet, onSe
   const applyTimer = useRef(null);
   const latest = useRef({ playback, serverNow, started });
   const lastPos = useRef({ t: 0, at: 0 });
+  const ended = useRef(false); // true from the end of a video until someone plays it again
   latest.current = { playback, serverNow, started };
 
   const cb = useRef({});
@@ -43,7 +44,16 @@ export default function SyncedPlayer({ playback, serverNow, started, onSet, onSe
             onReady: () => setReady(true),
             onError: (e) => setError(YT_ERRORS[e.data] || 'The video could not play.'),
             onStateChange: (e) => {
-              if (e.data === YT_ENDED) cb.current.onEnded?.();
+              if (e.data === YT_ENDED) {
+                ended.current = true;
+                cb.current.onEnded?.();
+                // Everyone's player has reached the end, so the room moves to "paused at the end".
+                const { playback: pb } = latest.current;
+                const p = playerRef.current;
+                if (pb?.status === 'playing' && p && !applyingRemote.current) cb.current.onSet('paused', p.getDuration());
+                return;
+              }
+              if (e.data === YT_PLAYING) ended.current = false;
               if (applyingRemote.current) return;
               const { playback: pb } = latest.current;
               const p = playerRef.current;
@@ -94,11 +104,11 @@ export default function SyncedPlayer({ playback, serverNow, started, onSet, onSe
       cb.current.onPosition?.(t);
       const dt = (Date.now() - lastPos.current.at) / 1000;
       const advanced = pb.status === 'playing' ? dt * (p.getPlaybackRate?.() || 1) : 0;
-      const jumped = Math.abs(t - (lastPos.current.t + advanced)) > 1.5;
+      const jumped = !ended.current && Math.abs(t - (lastPos.current.t + advanced)) > 1.5;
       lastPos.current = { t, at: Date.now() };
       if (jumped) return cb.current.onSeek(t);
       tick++;
-      if (tick % 4 === 0 && pb.status === 'playing') {
+      if (tick % 4 === 0 && pb.status === 'playing' && !ended.current) {
         const drift = t - expectedPosition(pb, sn());
         const a = driftAction(drift);
         if (a.type === 'seek') {
