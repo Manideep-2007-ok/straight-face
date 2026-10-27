@@ -1,0 +1,72 @@
+{
+ "input": [
+  48,
+  48
+ ],
+ "classes": [
+  "happy",
+  "surprise",
+  "neutral",
+  "other"
+ ],
+ "layers": [
+  {
+   "type": "conv3x3",
+   "in": 1,
+   "out": 32
+  },
+  {
+   "type": "conv3x3",
+   "in": 32,
+   "out": 32
+  },
+  {
+   "type": "maxpool2"
+  },
+  {
+   "type": "conv3x3",
+   "in": 32,
+   "out": 64
+  },
+  {
+   "type": "conv3x3",
+   "in": 64,
+   "out": 64
+  },
+  {
+   "type": "maxpool2"
+  },
+  {
+   "type": "conv3x3",
+   "in": 64,
+   "out": 128
+  },
+  {
+   "type": "conv3x3",
+   "in": 128,
+   "out": 128
+  },
+  {
+   "type": "maxpool2"
+  },
+  {
+   "type": "gap"
+  },
+  {
+   "type": "dense",
+   "in": 128,
+   "out": 128,
+   "relu": true
+  },
+  {
+   "type": "dense",
+   "in": 128,
+   "out": 4,
+   "relu": false
+  },
+  {
+   "type": "softmax"
+  }
+ ],
+ "floats": 303460
+}
