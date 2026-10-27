@@ -37,7 +37,7 @@ Friends and classmates who watch things together while apart.
 | Manual emoji and face-triggered emoji floating over the video | Built |
 | Reaction Radar heat strip, peaks, awards, past parties, sample party | Built, tested with seeded data |
 | Video queue with voting (most votes plays next) | Built, tested live |
-| Custom-trained emotion model (Part B) | See the model section below |
+| Custom-trained emotion model (Part B) | Trained and exported, works in the app behind a switch. **Off by default.** See the model card below. |
 | Custom glass control bar | Not built. The player uses YouTube's own controls, and every play, pause and seek is still synced. |
 
 ## What is pretrained and what is trained
@@ -45,7 +45,47 @@ Friends and classmates who watch things together while apart.
 - Face reading uses **MediaPipe FaceLandmarker, a pretrained model from Google**. Nothing in it was trained by this project.
 - The smile score is the mean of the two `mouthSmile` blendshapes. The surprise score is a scaled mean of `jawOpen`, `eyeWide` and `browInnerUp`.
 - The "laugh" in Reaction Radar is a **smile score**, not an audio laugh detector.
-- If a custom model is trained in Part B, it will be described in a Model card section here. Until then, there isn't one.
+- There is also a small CNN trained on FER2013 in `/model`. It is optional (`VITE_EMOTION_ENGINE=custom`) and described in the model card below.
+
+## Model card: the custom emotion CNN (optional)
+
+**What it is.** A small convolutional network that looks at a 48x48 grayscale face and says `happy`, `surprise`, `neutral` or `other` (angry, disgust, fear and sad are merged into `other`). It has 303,908 parameters. The game only needs "amused, startled or calm".
+
+**Data.** FER2013 (about 35,000 labelled 48x48 faces), downloaded as a Hugging Face mirror (`Aaryan333/fer2013_train_publicTest_privateTest`) because there were no Kaggle credentials. FER2013's own labels are noisy, and its original licence terms are unclear, so check them before reusing the model or the data.
+
+**Split.** The mirror's `train` and `publicTest` parts were pooled and split 90% / 10% (stratified) into training (29,068) and validation (3,230). The official `privateTest` part (3,589 faces) was kept untouched and used **once**, at the end.
+
+**Training.** Adam, learning rate 0.001 halved when validation stalled, class-weighted loss, augmentation (flip, 10 degree rotation, 10% zoom, brightness), early stopping with patience 6. It stopped after 37 epochs and the best epoch (31) was restored. Trained on a laptop CPU, in about an hour. Code: `model/train.py`. Curves: `model/out/curves.png`.
+
+**Result on the untouched test set** (always guessing the biggest class scores 46.5%):
+
+| | happy | surprise | neutral | other |
+|---|---|---|---|---|
+| Recall | 86.9% | 87.3% | 82.9% | 52.9% |
+| Precision | 84.0% | 60.6% | 47.7% | 88.9% |
+
+Overall test accuracy: **70.5%**. The plan's targets were happy recall of at least 80% and surprise recall of at least 65%; both were met.
+
+![Confusion matrix](model/out/confusion_matrix.png)
+
+**Where it is weak.** The `other` class is the problem: only 53% of angry, disgust, fear and sad faces are labelled `other`. Many are called `neutral` (497) or `surprise` (183). That is why `surprise` precision is only 61%. The game mostly uses `P(happy)`, which is the strongest part (87% recall, 84% precision).
+
+**Not done.** The plan's webcam reality check (B9: 20 selfies per class on a real webcam) was **not** done, so how well this works on real webcams in real rooms is unknown. Photos in FER2013 are not like a laptop camera in a dim room, so expect it to do worse than the numbers above. The two engines were also not compared on real people.
+
+**Why MediaPipe stays the default.** Its blendshapes are well tested on webcams, and it runs faster in the browser. The CNN takes about 150 ms per reading in plain JavaScript (about 5 to 7 readings a second), against about 8 for MediaPipe. A wider network would be more accurate but too slow with this runner.
+
+**How it runs in the browser.** `model/export.py` folds each BatchNorm layer into the convolution before it and writes plain float32 weights (`public/model/weights.bin`, 1.2 MB). `src/lib/emotionNet.js` runs them with no ML library. A test checks that the JavaScript output matches PyTorch's on 5 test faces to within 0.001. MediaPipe finds the face, and the face is cropped with a 20% margin and shrunk to 48x48.
+
+**Reproduce.**
+
+```bash
+cd model
+uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python torch --index-url https://download.pytorch.org/whl/cpu
+uv pip install --python .venv/bin/python numpy pandas pyarrow pillow scikit-learn matplotlib
+# put the three parquet files from the dataset above in model/data/raw/
+.venv/bin/python -I train.py     # about an hour on CPU
+.venv/bin/python -I export.py    # writes the browser files
+```
 
 ## Privacy
 
@@ -149,7 +189,7 @@ Optional: `npm run seed` in `backend/` creates 3 demo users (password `demo1234`
 | `NODE_ENV` | backend | `production` on Render. Turns on secure cross-site cookies |
 | `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` | backend | Optional TURN relay. Served to logged-in users by `GET /api/rtc/ice` so they never sit in the frontend bundle |
 | `VITE_API_URL` | frontend | Backend URL |
-| `VITE_EMOTION_ENGINE` | frontend | `mediapipe` (default) |
+| `VITE_EMOTION_ENGINE` | frontend | `mediapipe` (default) or `custom` (the CNN in `/model`) |
 
 ## Deployment
 
