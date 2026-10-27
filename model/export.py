@@ -5,8 +5,11 @@ Folds each BatchNorm into the convolution before it, then writes:
   frontend/vite-project/public/model/manifest.json layer list and shapes
   frontend/vite-project/public/model/parity.json   5 test faces + PyTorch outputs, to check the JS matches
 
-Run:  .venv/bin/python -I export.py   (after train.py)
+Run:  .venv/bin/python -I export.py                 (after train.py, uses out/best.pt)
+      .venv/bin/python -I export.py --name gpu1     (after train_gpu.py, uses out/gpu1/best.pt and out/gpu1/metrics.json)
+Works for any widths: they are read from the saved weights.
 """
+import argparse
 import io
 import json
 from pathlib import Path
@@ -17,7 +20,11 @@ import torch
 import torch.nn as nn
 from PIL import Image
 
+ap = argparse.ArgumentParser()
+ap.add_argument("--name", default=None)
+args = ap.parse_args()
 ROOT = Path(__file__).resolve().parent
+RUN = ROOT / "out" / args.name if args.name else ROOT / "out"
 DEST = ROOT.parent / "frontend" / "vite-project" / "public" / "model"
 DEST.mkdir(parents=True, exist_ok=True)
 
@@ -30,18 +37,20 @@ def block(cin, cout):
     ]
 
 
-class Net(nn.Module):  # must match train.py
-    def __init__(self):
+class Net(nn.Module):  # must match train.py / train_gpu.py
+    def __init__(self, w=(32, 64, 128)):
         super().__init__()
-        self.features = nn.Sequential(*block(1, 32), *block(32, 64), *block(64, 128))
-        self.head = nn.Sequential(nn.Linear(128, 128), nn.ReLU(inplace=True), nn.Dropout(0.5), nn.Linear(128, 4))
+        self.features = nn.Sequential(*block(1, w[0]), *block(w[0], w[1]), *block(w[1], w[2]))
+        self.head = nn.Sequential(nn.Linear(w[2], 128), nn.ReLU(inplace=True), nn.Dropout(0.5), nn.Linear(128, 4))
 
     def forward(self, x):
         return self.head(self.features(x).mean(dim=(2, 3)))
 
 
-net = Net()
-net.load_state_dict(torch.load(ROOT / "out" / "best.pt", map_location="cpu", weights_only=True))
+sd = torch.load(RUN / "best.pt", map_location="cpu", weights_only=True)
+widths = [sd["features.0.weight"].shape[0], sd["features.8.weight"].shape[0], sd["features.16.weight"].shape[0]]
+net = Net(widths)
+net.load_state_dict(sd)
 net.eval()
 
 layers, blobs = [], []
@@ -69,7 +78,7 @@ for lin, relu in [(net.head[0], True), (net.head[3], False)]:
 layers.append({"type": "softmax"})
 
 (DEST / "weights.bin").write_bytes(np.concatenate(blobs).tobytes())
-metrics = json.loads((ROOT / "out" / "metrics.json").read_text())
+metrics = json.loads((RUN / "metrics.json").read_text())
 (DEST / "manifest.json").write_text(json.dumps({
     "input": [48, 48], "classes": metrics["classes"], "layers": layers,
     "floats": int(sum(b.size for b in blobs)),
@@ -86,4 +95,4 @@ for idx in rng.choice(len(df), 5, replace=False):
         logits = net(x)[0]
     samples.append({"pixels": img.ravel().tolist(), "probs": torch.softmax(logits, 0).tolist()})
 (DEST / "parity.json").write_text(json.dumps(samples))
-print("wrote", DEST, "floats", sum(b.size for b in blobs), "bytes", (DEST / "weights.bin").stat().st_size)
+print("widths", widths, "wrote", DEST, "floats", sum(b.size for b in blobs), "bytes", (DEST / "weights.bin").stat().st_size)
