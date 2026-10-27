@@ -1,5 +1,7 @@
 # Demo video script (about 4 minutes)
 
+The class guidelines ask for a **3 to 5 minute** video that shows: (1) the problem, (2) who it is for, (3) the major workflows, (4) the most interesting functionality, and (5) the final working application. Do not spend the video reading code; show the product working. The script below covers all five.
+
 Record a screen capture of the laptop with the phone shown beside it (or a second window). Speak plainly; the numbers in
 brackets are rough timings.
 
@@ -14,11 +16,14 @@ brackets are rough timings.
 4. **Good light on your face** for the game, camera at eye level, face filling a good part of the picture.
 5. Have a short **YouTube link** ready (under 2 minutes, one that allows embedding) and a small **MP3 or MP4** file on the laptop.
 6. Close other tabs and silence notifications.
+7. **After uploading the video, open the video, GitHub and live links in an incognito window** (the guidelines ask for this) to
+   check they open without asking for permission.
 
 ## Script
 
-**0:00 The problem (15 s).** "Watch parties today are a video and a chat box. Nothing reacts to the people actually watching.
-Straight Face is a watch party where your face plays the game."
+**0:00 The problem and who it is for (20 s).** "Watch parties today are a video and a chat box. Nothing reacts to the people
+actually watching. Straight Face is for friends and classmates who watch things together while apart: it is a watch party where
+your face plays the game."
 
 **0:15 Sign up and make a room (25 s).** Show the landing page. Log in as Riya. Create a room called "Demo night". Point at the
 6-letter code and the "Copy invite link" button.
@@ -34,12 +39,14 @@ keeps everyone within about a second of each other."
 **1:30 Chat and reactions (15 s).** Send a chat message (note the video time stamp). Tap two emoji: they float up on both
 screens.
 
-**1:45 Queue and voting (10 s).** Add two videos to the queue, vote on the phone, press **Play the top video**.
+**1:42 Face reactions (15 s).** Switch on **Face reactions**, hold a neutral face for the 3 seconds it asks for, then smile, look surprised, and stick your tongue out: the label shows what it sees and the emoji float up for everyone. Say: "It learns your own resting face first, so it adapts to you."
+
+**1:57 Queue and voting (10 s).** Add two videos to the queue, vote on the phone, press **Play the top video**.
 
 **1:55 Share anything (20 s).** Press **Play a local video or song**, pick the MP3: the other device hears it and shows a "now
 playing" card. Stop. Say: "Any website works too, with **Share screen or tab**."
 
-**2:15 Don't Laugh (60 s).** Load a funny short video. Press **Start Don't Laugh**. Both people hold a neutral face for the 3
+**2:12 Don't Laugh (60 s).** Load a funny short video. Press **Start Don't Laugh**. Both people hold a neutral face for the 3
 second calibration ("this sets what calm looks like for you, so people who naturally smile do not lose at once"). Press
 **Start countdown**. During the video, one person smiles: they get the red OUT stamp, the other wins. Say: "The camera is read
 in the browser. Only a smile score leaves the device. Nothing is recorded or uploaded."
