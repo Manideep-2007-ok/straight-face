@@ -1,3 +1,4 @@
+// FORCE_RELAY=0 runs the same call over a direct path, to compare how much data each uses.
 // Forces both browsers to use ONLY the relay (TURN) server, like two devices that cannot reach each other directly,
 // and checks that the call still connects and video flows, over a path of type "relay".
 //   APP=https://your-site PLAYWRIGHT_FROM=... CHROMIUM=... node tests/browser/relay.mjs
@@ -9,9 +10,10 @@ const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || 
   args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--no-sandbox'] });
 async function user(email) {
   const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
+  await ctx.addInitScript(`window.__forceRelay = ${process.env.FORCE_RELAY !== '0'};`);
   await ctx.addInitScript(() => {
     const O = window.RTCPeerConnection; window.__pcs = [];
-    window.RTCPeerConnection = function (cfg = {}, ...r) { const pc = new O({ ...cfg, iceTransportPolicy: 'relay' }, ...r); window.__pcs.push(pc); return pc; };
+    window.RTCPeerConnection = function (cfg = {}, ...r) { const pc = new O(window.__forceRelay ? { ...cfg, iceTransportPolicy: 'relay' } : cfg, ...r); window.__pcs.push(pc); return pc; };
     window.RTCPeerConnection.prototype = O.prototype;
   });
   const page = await ctx.newPage();
@@ -44,7 +46,17 @@ const frames = async (p) => p.evaluate(() => [...document.querySelectorAll('.til
 console.log('Riya path :', JSON.stringify(pa));
 console.log('Arjun path:', JSON.stringify(pb));
 console.log('video frames showing  Riya:', await frames(a), ' Arjun:', await frames(b));
+// How much data does Riya send? Measure outgoing audio+video bytes over 10 seconds, after the call has settled.
+await new Promise((r) => setTimeout(r, 8000));
+const sent = (p) => p.evaluate(async () => { let t = 0; for (const pc of window.__pcs) { if (pc.connectionState !== 'connected') continue; (await pc.getStats()).forEach((r) => r.type === 'outbound-rtp' && (t += r.bytesSent || 0)); } return t; });
+const limit = (p) => p.evaluate(() => { const o = []; for (const pc of window.__pcs) { if (pc.connectionState !== 'connected') continue; pc.getSenders().forEach((s) => s.track?.kind === 'video' && o.push(s.getParameters().encodings?.[0]?.maxBitrate ?? 'none')); } return o; });
+const b0 = await sent(a); await new Promise((r) => setTimeout(r, 10000)); const b1 = await sent(a);
+const kbps = Math.round(((b1 - b0) * 8) / 10 / 1000);
+console.log(`mode: ${process.env.FORCE_RELAY === '0' ? 'direct' : 'relay only'};  Riya sends about ${kbps} kbit/s (video+audio);  video maxBitrate setting: ${JSON.stringify(await limit(a))}`);
+console.log(`=> about ${(kbps * 2 * 3600 / 8 / 1000).toFixed(0)} MB per hour of a 2-person call (both directions)`);
+if (process.env.FORCE_RELAY !== '0' && kbps > 300) { console.log('FAIL: the relayed call is using too much data'); await browser.close(); process.exit(1); }
 const viaRelay = ok && (pa.local === 'relay' || pa.remote === 'relay') && (pb.local === 'relay' || pb.remote === 'relay');
-console.log(viaRelay ? 'PASS: connected, and the traffic goes through the relay' : 'FAIL: did not connect through the relay');
+if (process.env.FORCE_RELAY === '0') { console.log('direct run finished'); await browser.close(); process.exit(0); }
+console.log(viaRelay ? 'PASS: connected, through the relay, at a low data rate' : 'FAIL: did not connect through the relay');
 await browser.close();
 process.exit(viaRelay ? 0 : 1);
