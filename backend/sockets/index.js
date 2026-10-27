@@ -1,7 +1,8 @@
 import { Server } from 'socket.io';
 import { parseCookie } from 'cookie';
 import { User, Room, PartySession, ChatMessage, GameRound, ReactionEvent } from '../models/index.js';
-import { verifyToken } from '../middleware/index.js';
+import { verifyToken, sessionIsCurrent } from '../middleware/index.js';
+import { sessionBus } from '../state/sessionBus.js';
 import { initialPlayback, expectedPosition, applyAction } from '../logic/playbackState.js';
 import { RateBucket } from '../logic/rateBucket.js';
 import * as dl from '../logic/dontLaugh.js';
@@ -71,11 +72,12 @@ export function attachSockets(httpServer, config, registry) {
 
   io.use(async (socket, next) => {
     const cookies = parseCookie(socket.handshake.headers.cookie || '');
-    const userId = verifyToken(cookies.token, config.JWT_SECRET);
-    if (!userId) return next(new Error('auth_error'));
-    const user = await User.findById(userId).lean().catch(() => null);
+    const t = verifyToken(cookies.token, config.JWT_SECRET);
+    if (!t) return next(new Error('auth_error'));
+    if (!(await sessionIsCurrent(t))) return next(new Error('session_replaced'));
+    const user = await User.findById(t.userId).lean().catch(() => null);
     if (!user) return next(new Error('auth_error'));
-    socket.user = { userId: String(user._id), name: user.name };
+    socket.user = { userId: String(user._id), name: user.name, sid: t.sid };
     next();
   });
 
@@ -154,6 +156,8 @@ export function attachSockets(httpServer, config, registry) {
       const room = await Room.findOne({ code: wanted });
       if (!room) return reply({ error: 'NOT_FOUND' });
       if (code && code !== wanted) await leave();
+      // Same person coming back on a new connection before the old one timed out: their old calls are dead.
+      const rejoining = registry.members(wanted).some((m) => m.userId === socket.user.userId && m.socketId !== socket.id);
       const res = registry.join(wanted, socket.user, socket.id);
       if (!res.ok) return reply({ error: res.error });
       code = wanted;
@@ -169,6 +173,7 @@ export function attachSockets(httpServer, config, registry) {
         { $push: { participants: { userId: socket.user.userId, name: socket.user.name } } },
       );
       io.to(code).emit('room:members', members());
+      if (rejoining) socket.to(code).emit('rtc:reset', { userId: socket.user.userId });
       reply({
         ok: true,
         room: { code, name: room.name },
@@ -417,7 +422,19 @@ export function attachSockets(httpServer, config, registry) {
     socket.on('disconnect', leave);
   });
 
+  // A newer login for the same account closes this account's older connections straight away.
+  const onReplaced = ({ userId, sid }) => {
+    for (const sock of io.sockets.sockets.values()) {
+      if (sock.user?.userId === userId && sock.user.sid !== sid) {
+        sock.emit('session:replaced');
+        sock.disconnect(true);
+      }
+    }
+  };
+  sessionBus.on('replaced', onReplaced);
+
   const closeAll = async () => {
+    sessionBus.off('replaced', onReplaced);
     clearInterval(timer);
     await Promise.all([...live.keys()].map(flush));
     io.close();
