@@ -8,13 +8,17 @@ Up to four friends watch the same YouTube video in sync, talk on voice and video
 - Code: https://github.com/Manideep-2007-ok/straight-face
 - Demo video: _add the link after recording_
 
-## Problem
+## Problem statement
 
 Watch parties are a video plus a chat box. Nothing reacts to the people actually watching.
 
-## Users
+## Target users
 
-Friends and classmates who watch things together while apart.
+Friends and classmates who watch things together while apart, and anyone who wants a watch party that reacts to the people in it.
+
+## Solution
+
+A room of up to four people shares one synced video, a voice and video call, chat, and a game that uses their own faces. Each browser reads its own face locally, so nothing about a face leaves the device except a few numbers. Those numbers power a **Don't Laugh** game (last straight face wins), floating **emoji reactions**, and a **Reaction Radar** recap that shows the exact seconds the room cracked up, plus awards. When a video is not on YouTube, anyone can share a screen, a browser tab, or a video or song from their own computer instead.
 
 ## Words used in this README
 
@@ -25,7 +29,7 @@ Friends and classmates who watch things together while apart.
 - **MediaPipe**: Google's pretrained face-tracking library. It runs in the browser.
 - **Blendshape**: a number from 0 to 1 for one facial movement, such as "mouth smile left".
 
-## Features
+## Key features
 
 | Feature | Status |
 |---|---|
@@ -35,13 +39,28 @@ Friends and classmates who watch things together while apart.
 | Voice and video mesh, mic and camera toggles, speaker ring, no-camera fallback | Built. Calls try a direct path first and fall back to a relay server only when needed. Tested between real browsers with fake cameras (`tests/browser/webrtc.mjs`, `reconnect.mjs`, `relay.mjs`) and tried by the author on a real laptop and phone on one network. Between different networks it uses the relay, verified with a forced-relay test on the live site. |
 | Face reading (smile, surprise) with per-person calibration | Built. Tested on fake webcam video of FER2013 faces on the live site, and tried by the author on a real webcam. |
 | Don't Laugh round: calibrate, 5 s countdown, live, winner | Server rules fully tested. Played end to end on the live site in two real browsers with fake face videos: the smiling player was marked out and the other won, and "End round" gave a shared win. Also tried live by the author. |
-| Manual emoji and face-triggered emoji floating over the video | Built |
+| Manual emoji buttons, and emoji sent by your face (smile, surprise, disgust, anger, tongue, kiss, wink) that float over the video for everyone | Built. Learns your resting face first. Surprise and smile tested on faces in a real browser; sad is not detected (see "What expressions it recognises"). |
 | Reaction Radar heat strip, peaks, awards, past parties, sample party | Built, tested with seeded data |
 | Video queue with voting (most votes plays next) | Built, tested live |
 | Share a screen or browser tab (any website, with tab audio) | Built. Tested between real browsers, including a late joiner. |
 | Play a local video or song (MP4, WebM, MP3, M4A, WAV and more) for everyone | Built. Tested with an MP4 and an MP3 between real browsers. |
 | Custom-trained emotion model (Part B) | Trained and exported, works in the app behind a switch. **Off by default.** See the model card below. |
 | Custom glass control bar | Not built. The player uses YouTube's own controls, and every play, pause and seek is still synced. |
+
+## What expressions it recognises (and what it does not)
+
+With **Face reactions** switched on, the app first learns your resting face for 3 seconds, so a naturally open mouth or low brows is not mistaken for an expression, and then shows what it sees ("Seeing: 😮 surprise"). It sends an emoji when an expression holds for about a quarter of a second, at most once every 4 seconds per expression.
+
+| Expression | Emoji | How it is detected | How well it separates this expression from a neutral face* |
+|---|---|---|---|
+| Smile and laugh | 😄 😂 | smile blendshapes, strength decides which | 0.99 |
+| Surprise | 😮 | open jaw plus wide eyes | 0.94 |
+| Disgust | 🤢 | nose wrinkle, raised upper lip, lowered brows (blocked while smiling, because a smile raises the lip too) | 0.85 |
+| Anger | 😠 | lowered brows | 0.65 (weak) |
+| Tongue out, kiss, wink | 😛 😘 😉 | tongue, lip pucker, one eye closed | not in the dataset; they are direct measurements |
+| **Sad** | none | **not detected** | 0.50, which is chance |
+
+\* Area under the ROC curve (1.0 is perfect, 0.5 is chance), measured by running MediaPipe on about 400 labelled faces from FER2013 (60 per emotion). Those photos are tiny and blurry, which makes every number worse than on a webcam, and FER2013's labels for anger, sadness and fear are known to be noisy. Sad could not be told apart from neutral with any frown or brow formula on this data, so the app does not claim to detect it. The custom CNN described below recognises only happy, surprise, neutral and other.
 
 ## What is pretrained and what is trained
 
@@ -130,6 +149,20 @@ Only YouTube links can be played in sync by everyone's own player. For everythin
 4. **Result**: last straight face wins. If the video ends with 2 or more still in, they share the title "Poker faces".
 
 Known limit: it is a party game, so each browser reports its own face and cheating is possible. Covering the camera makes the face "not found", which counts as watching from the sidelines, not as winning.
+
+## Tech stack
+
+| Part | What | Why |
+|---|---|---|
+| Front end | React, Vite, React Router, plain CSS | A single-page app with a few real-time screens; no component library, so the design is its own |
+| Back end | Node.js, Express 5 | REST for accounts and rooms, one process |
+| Live updates | Socket.IO | Playback sync, chat, game state and call set-up need push, not polling |
+| Database | MongoDB Atlas with Mongoose | Users, rooms, parties, chat, reactions and rounds; live room state stays in memory for speed |
+| Calls | WebRTC (peer to peer mesh), TURN relay as a fallback | Video and voice go straight between people, so the server carries no media |
+| Face reading | MediaPipe Face Landmarker in the browser; an optional small CNN trained on FER2013 (PyTorch, exported to plain JavaScript) | Faces never leave the device |
+| Validation and security | zod, bcrypt, JWT in an httpOnly cookie, helmet, CORS allow-list, rate limits | Every input is validated; passwords are hashed |
+| Hosting | Render (two services) and MongoDB Atlas | See Deployment |
+| Tests | node:test, live socket checks, Playwright browser tests | See Tests |
 
 ## Architecture
 
