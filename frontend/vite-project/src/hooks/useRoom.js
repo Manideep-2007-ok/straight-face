@@ -17,6 +17,7 @@ export function useRoom(code) {
   const [chat, setChat] = useState([]);
   const [queue, setQueue] = useState([]);
   const [share, setShare] = useState(null);
+  const [joinCount, setJoinCount] = useState(0); // goes up every time we (re)enter the room
   const [level, setLevel] = useState(0);
   const [round, setRound] = useState({ phase: 'idle', players: [], winners: [] });
 
@@ -52,6 +53,7 @@ export function useRoom(code) {
       if (r.queue) setQueue(r.queue);
       setShare(r.share || null);
       setStatus('joined');
+      setJoinCount((n) => n + 1);
       setOnline(true); // only now: before this, sending would be refused by the server
     }
 
@@ -59,8 +61,10 @@ export function useRoom(code) {
       join(); // "online" turns true once the room has been re-entered
     });
     socket.on('disconnect', () => setOnline(false));
+    socket.on('session:replaced', () => window.dispatchEvent(new Event('session-replaced')));
     socket.on('connect_error', (e) => {
-      if (e.message === 'auth_error') setStatus('autherror');
+      if (e.message === 'session_replaced') window.dispatchEvent(new Event('session-replaced'));
+      else if (e.message === 'auth_error') setStatus('autherror');
       else setOnline(false);
     });
     socket.on('room:members', setMembers);
@@ -94,6 +98,7 @@ export function useRoom(code) {
     round,
     queue,
     share,
+    joinCount,
     level,
     emit,
     serverNow,

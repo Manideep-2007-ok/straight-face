@@ -47,7 +47,7 @@ export default function Room() {
   const floaters = useFloaters(room.socket);
   const [file, setFile] = useState(null); // a local video/audio file the user picked to share
   const fileInput = useRef(null);
-  const rtc = useWebRTC({ socketRef: room.socket, me: room.me, members: room.members, enabled: started && room.status === 'joined' });
+  const rtc = useWebRTC({ socketRef: room.socket, me: room.me, members: room.members, enabled: started && room.status === 'joined', epoch: room.joinCount });
 
   const sh = useShare({ socketRef: room.socket, me: room.me, members: room.members, share: room.share, emit: room.emit });
   // The file player goes away when a share that was running ends (not before it has started).
@@ -197,6 +197,8 @@ export default function Room() {
                 camOff={isMe && !rtc.camOn}
                 micOff={isMe && !rtc.micOn}
                 out={rp ? !rp.alive : false}
+                noRelay={!rtc.hasTurn}
+                onRetry={() => rtc.retry(m.userId)}
               />
             );
           })}

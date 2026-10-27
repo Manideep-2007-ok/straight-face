@@ -3,12 +3,15 @@ import { api } from '../lib/api.js';
 
 // Full-mesh WebRTC using "perfect negotiation" so two people joining at once cannot deadlock.
 // media: 'idle' | 'asking' | 'live' | 'denied' | 'none'   (denied/none = watch + chat only)
-export function useWebRTC({ socketRef, me, members, enabled }) {
+export function useWebRTC({ socketRef, me, members, enabled, epoch = 0 }) {
   const [media, setMedia] = useState('idle');
   const [localStream, setLocalStream] = useState(null);
   const [remote, setRemote] = useState({}); // userId -> { stream, state }
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
+  const [hasTurn, setHasTurn] = useState(false);
+  const [tick, setTick] = useState(0); // bumped to make the "connect to everyone" step run again
+  const attempts = useRef(new Map()); // userId -> automatic rebuilds so far
   const peers = useRef(new Map());
   const iceRef = useRef(null);
   const streamRef = useRef(null);
@@ -59,15 +62,48 @@ export function useWebRTC({ socketRef, me, members, enabled }) {
     [socketRef],
   );
 
+  // Throw a call away so a fresh one is built. `notify` tells the other person to do the same: a new call cannot
+  // be matched with the old one on the other side (the encryption keys differ).
+  const resetPeer = useCallback(
+    (id, notify = false) => {
+      const p = peers.current.get(id);
+      if (p) {
+        p.pc.onconnectionstatechange = null;
+        p.pc.close();
+        peers.current.delete(id);
+      }
+      setRemote((r) => {
+        const { [id]: _gone, ...rest } = r;
+        return rest;
+      });
+      if (notify) socketRef.current?.emit('rtc:signal', { to: id, type: 'reset' });
+      setTick((t) => t + 1);
+    },
+    [socketRef],
+  );
+
+  // Rebuild a broken call by itself, a few times, with a growing pause.
+  const recover = useCallback(
+    (id) => {
+      const n = attempts.current.get(id) || 0;
+      if (n >= 3) return;
+      attempts.current.set(id, n + 1);
+      setTimeout(() => peers.current.has(id) && resetPeer(id, true), 1500 * (n + 1));
+    },
+    [resetPeer],
+  );
+
   const ensurePeer = useCallback(
     async (id) => {
+      if (peers.current.get(id)?.pc.signalingState === 'closed') peers.current.delete(id);
       if (peers.current.has(id)) return peers.current.get(id);
       if (!iceRef.current) {
-        iceRef.current = await api.ice().catch(() => ({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }));
+        iceRef.current = await api.ice().catch(() => ({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }], hasTurn: false }));
+        setHasTurn(!!iceRef.current.hasTurn);
       }
       if (peers.current.has(id)) return peers.current.get(id);
       const pc = new RTCPeerConnection({ iceServers: iceRef.current.iceServers });
-      const peer = { pc, polite: me.userId > id, makingOffer: false, ignoreOffer: false, pending: [] };
+      const peer = { pc, polite: me.userId > id, makingOffer: false, ignoreOffer: false, pending: [], since: Date.now() };
       peers.current.set(id, peer);
       setPeerState(id, { state: 'connecting' });
 
@@ -97,12 +133,19 @@ export function useWebRTC({ socketRef, me, members, enabled }) {
       };
       pc.onconnectionstatechange = () => {
         const s = pc.connectionState;
-        setPeerState(id, { state: s === 'connected' ? 'connected' : s === 'failed' || s === 'disconnected' ? 'reconnecting' : 'connecting' });
-        if (s === 'failed') pc.restartIce();
+        peer.since = Date.now();
+        if (s === 'connected') {
+          attempts.current.delete(id);
+          setPeerState(id, { state: 'connected' });
+        } else if (s === 'failed') {
+          setPeerState(id, { state: 'failed' });
+          recover(id);
+        } else if (s === 'disconnected') setPeerState(id, { state: 'reconnecting' });
+        else setPeerState(id, { state: 'connecting' });
       };
       return peer;
     },
-    [me, send, setPeerState],
+    [me, send, setPeerState, recover],
   );
 
   // 2. Incoming signalling. Messages that arrive before our camera state is settled (still at the join gate,
@@ -115,6 +158,10 @@ export function useWebRTC({ socketRef, me, members, enabled }) {
 
   const handleSignal = useCallback(
     async ({ from, type, payload }) => {
+      if (type === 'reset') {
+        resetPeer(from, false); // the other side threw its call away; build a new one with them
+        return;
+      }
       const peer = await ensurePeer(from);
       const { pc } = peer;
       try {
@@ -144,7 +191,7 @@ export function useWebRTC({ socketRef, me, members, enabled }) {
         console.warn('signalling error', e);
       }
     },
-    [ensurePeer, send],
+    [ensurePeer, send, resetPeer],
   );
 
   const process = useCallback(
@@ -162,9 +209,35 @@ export function useWebRTC({ socketRef, me, members, enabled }) {
       queueRef.current.push(m);
       if (readyRef.current) queueRef.current.splice(0).forEach(process);
     };
+    const onReset = ({ userId }) => resetPeer(userId, false);
     socket.on('rtc:signal', onSignal);
-    return () => socket.off('rtc:signal', onSignal);
-  }, [socketRef, me, process]);
+    socket.on('rtc:reset', onReset);
+    return () => {
+      socket.off('rtc:signal', onSignal);
+      socket.off('rtc:reset', onReset);
+    };
+  }, [socketRef, me, process, resetPeer]);
+
+  // After WE reconnected, every call we had is dead: start all of them again.
+  useEffect(() => {
+    if (epoch > 1) [...peers.current.keys()].forEach((id) => resetPeer(id, false));
+  }, [epoch, resetPeer]);
+
+  // Watchdog: a call stuck "disconnected" for 8 s, or never getting connected for 25 s, is rebuilt.
+  useEffect(() => {
+    const t = setInterval(() => {
+      peers.current.forEach((p, id) => {
+        const age = Date.now() - p.since;
+        const s = p.pc.connectionState;
+        const dead = s === 'closed' || p.pc.signalingState === 'closed'; // e.g. a phone browser suspended the tab
+        if (dead || (s === 'disconnected' && age > 8000) || ((s === 'new' || s === 'connecting') && age > 25000)) {
+          p.since = Date.now();
+          recover(id);
+        }
+      });
+    }, 5000);
+    return () => clearInterval(t);
+  }, [recover]);
 
   useEffect(() => {
     if (!readyRef.current || !queueRef.current.length) return;
@@ -186,7 +259,7 @@ export function useWebRTC({ socketRef, me, members, enabled }) {
         });
       }
     });
-  }, [members, me, media, ensurePeer]);
+  }, [members, me, media, ensurePeer, tick]);
 
   const toggle = (kind, setter) => () => {
     const tracks = kind === 'audio' ? streamRef.current?.getAudioTracks() : streamRef.current?.getVideoTracks();
@@ -202,6 +275,11 @@ export function useWebRTC({ socketRef, me, members, enabled }) {
     remote,
     micOn,
     camOn,
+    hasTurn,
+    retry: (id) => {
+      attempts.current.delete(id);
+      resetPeer(id, true);
+    },
     toggleMic: toggle('audio', setMicOn),
     toggleCam: toggle('video', setCamOn),
   };

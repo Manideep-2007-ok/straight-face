@@ -113,3 +113,8 @@
 .file-audio { display: grid; place-items: center; gap: var(--s3); width: 100%; }
 .file-audio audio { width: min(90%, 480px); }
 @media (prefers-reduced-motion: reduce) { .bars span { animation: none; transform: scaleY(0.6); } }
+
+.tile-note { font-size: 0.6875rem; line-height: 1.3; color: var(--muted); text-align: center; }
+.tap-sound { min-height: 28px; padding: 0 var(--s2); font-size: 0.75rem; }
+.tile { width: 128px; }
+.tile:has(.tile-note) { width: 176px; }
