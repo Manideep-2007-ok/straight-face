@@ -59,9 +59,12 @@ const limiterMessage = (req) => ({
   meta: { requestId: req.id },
 });
 
+// Only FAILED attempts count (wrong password, bad input), so guessing is still capped at 10 per 15 minutes per network
+// but a classroom logging in successfully from one Wi-Fi is not locked out.
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: process.env.NODE_ENV === 'production' ? 10 : 200,
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => res.status(429).json(limiterMessage(req)),
