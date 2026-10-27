@@ -1,4 +1,4 @@
-# Demo video script (about 4 minutes)
+# Demo video script (about 4 minutes 30 seconds)
 
 The class guidelines ask for a **3 to 5 minute** video that shows: (1) the problem, (2) who it is for, (3) the major workflows, (4) the most interesting functionality, and (5) the final working application. Do not spend the video reading code; show the product working. The script below covers all five.
 
@@ -19,47 +19,51 @@ brackets are rough timings.
 7. **After uploading the video, open the video, GitHub and live links in an incognito window** (the guidelines ask for this) to
    check they open without asking for permission.
 
-## Script
+## Script (about 4 minutes 30 seconds)
+
+Times are cumulative. If you run long, **drop the queue segment** (it is the least important) and you finish near 4:20.
 
 **0:00 The problem and who it is for (20 s).** "Watch parties today are a video and a chat box. Nothing reacts to the people
 actually watching. Straight Face is for friends and classmates who watch things together while apart: it is a watch party where
 your face plays the game."
 
-**0:15 Sign up and make a room (25 s).** Show the landing page. Log in as Riya. Create a room called "Demo night". Point at the
-6-letter code and the "Copy invite link" button.
+**0:20 Sign up and make a room (25 s).** Show the landing page, press **Create a room**, and sign up as a new person (name,
+email, password). Create a room called "Demo night". Point at the 6-letter code and the **Copy invite link** button.
 
-**0:40 Join from a second device (20 s).** On the phone, log in as Arjun, type the code, press **Join the party**. Show both
-people's tiles appear on both screens with live video. Say: "Calls go straight between the two devices. If a network blocks
+**0:45 Join from a second device (20 s).** On the phone, log in as `arjun@demo.test`, type the code, press **Join the party**.
+Show both people's tiles with live video on both screens. Say: "Calls go straight between the two devices. If a network blocks
 that, they fall back to a relay server."
 
-**1:00 Synced video (30 s).** Paste the YouTube link and press **Play this video**. It starts on both. Pause on the phone: it
+**1:05 Synced video (30 s).** Paste the YouTube link and press **Play this video**. It starts on both. Pause on the phone: it
 pauses on the laptop and says who paused it. Seek on the laptop: the phone jumps. Say: "Anyone can control it, and the server
 keeps everyone within about a second of each other."
 
-**1:30 Chat and reactions (15 s).** Send a chat message (note the video time stamp). Tap two emoji: they float up on both
-screens.
+**1:35 Chat and emoji (15 s).** Send a chat message (note the video time stamp). Tap two emoji: they float up on both screens.
 
-**1:42 Face reactions (15 s).** Switch on **Face reactions**, hold a neutral face for the 3 seconds it asks for, then smile, look surprised, and stick your tongue out: the label shows what it sees and the emoji float up for everyone. Say: "It learns your own resting face first, so it adapts to you."
+**1:50 Face reactions (15 s).** Switch on **Face reactions**, hold a neutral face for the 3 seconds it asks for, then smile,
+look surprised, and stick your tongue out: the label shows what it sees and the emoji float up for everyone. Say: "It learns
+your own resting face first, so it adapts to you."
 
-**1:57 Queue and voting (10 s).** Add two videos to the queue, vote on the phone, press **Play the top video**.
+**2:05 Queue and voting (10 s, optional).** Add two videos to the queue, vote on the phone, press **Play the top video**.
 
-**1:55 Share anything (20 s).** Press **Play a local video or song**, pick the MP3: the other device hears it and shows a "now
+**2:15 Share anything (20 s).** Press **Play a local video or song**, pick the MP3: the other device hears it and shows a "now
 playing" card. Stop. Say: "Any website works too, with **Share screen or tab**."
 
-**2:12 Don't Laugh (60 s).** Load a funny short video. Press **Start Don't Laugh**. Both people hold a neutral face for the 3
-second calibration ("this sets what calm looks like for you, so people who naturally smile do not lose at once"). Press
-**Start countdown**. During the video, one person smiles: they get the red OUT stamp, the other wins. Say: "The camera is read
-in the browser. Only a smile score leaves the device. Nothing is recorded or uploaded."
+**2:35 Don't Laugh, the main feature (60 s).** Load a funny short video. Press **Start Don't Laugh**. Both people hold a neutral
+face for the 3 second calibration ("this sets what calm looks like for you, so people who naturally smile do not lose at
+once"). Press **Start countdown**. During the video, one person smiles: they get the red OUT stamp, the other wins. Say: "The
+camera is read in the browser. Only a few numbers, like how much you are smiling, leave the device. Nothing is recorded or
+uploaded."
 
-**3:15 Recap (30 s).** Open **Recaps**. Show the heat strip of when the room laughed, the peak times, the awards, and the
+**3:35 Recap (30 s).** Open **Recaps**. Show the heat strip of when the room laughed, the peak times, the awards, and the
 round result. Open the "Sample party" tab to show a fuller one.
 
-**3:45 How it works (30 s).** Show the README architecture diagram. Say: "React and Vite on the front end, Node, Express and
-Socket.IO on the back end, MongoDB Atlas for the data. Playback sync uses a server clock and drift correction. Calls are
-WebRTC. Face reading is MediaPipe in the browser, and I also trained a small CNN on FER2013 that reached 70.5 percent on its
-test set, which is optional. Everything is deployed on Render, with tests for the logic, the API, and real browsers."
+**4:05 How it works (20 s).** Show the README architecture diagram, briefly. Say: "React and Vite on the front end, Node,
+Express and Socket.IO on the back end, MongoDB Atlas for the data. Calls are WebRTC, face reading is MediaPipe in the browser,
+and I also trained a small CNN that reached 70.5 percent on its test set. It is tested and deployed on Render."
 
-**4:00 End.**
+**4:25 The final app (10 s).** Show the live address in the browser bar and the GitHub page. Say: "It is live at this address, and
+the code, tests and documentation are in this repository." **4:35 End.**
 
 ## If something goes wrong while recording
 
@@ -72,7 +76,7 @@ test set, which is optional. Everything is deployed on Render, with tests for th
 
 > Straight Face is a watch party where your face plays the game. Up to four friends watch the same YouTube video in sync
 > (anyone can play, pause or seek), talk on voice and video, chat, and share a screen, tab or local video or MP3. Each browser
-> reads its own face locally with MediaPipe (nothing is recorded or uploaded; only a smile score is shared) to power a "Don't
+> reads its own face locally with MediaPipe (nothing is recorded or uploaded; only a few numbers such as a smile score are shared) to power a "Don't
 > Laugh" game, auto emoji reactions, and a Reaction Radar recap that shows the exact seconds the room cracked up, plus awards.
 > The problem: watch parties are just a video and a chat box, and nothing reacts to the people watching.
 > Tech: React + Vite, Node + Express, Socket.IO, MongoDB Atlas (Mongoose), WebRTC mesh with a TURN relay fallback, MediaPipe
