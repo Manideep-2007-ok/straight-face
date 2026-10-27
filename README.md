@@ -37,6 +37,8 @@ Friends and classmates who watch things together while apart.
 | Manual emoji and face-triggered emoji floating over the video | Built |
 | Reaction Radar heat strip, peaks, awards, past parties, sample party | Built, tested with seeded data |
 | Video queue with voting (most votes plays next) | Built, tested live |
+| Share a screen or browser tab (any website, with tab audio) | Built. Tested between real browsers, including a late joiner. |
+| Play a local video or song (MP4, WebM, MP3, M4A, WAV and more) for everyone | Built. Tested with an MP4 and an MP3 between real browsers. |
 | Custom-trained emotion model (Part B) | Trained and exported, works in the app behind a switch. **Off by default.** See the model card below. |
 | Custom glass control bar | Not built. The player uses YouTube's own controls, and every play, pause and seek is still synced. |
 
@@ -105,6 +107,16 @@ uv pip install --python .venv/bin/python numpy pandas pyarrow pillow scikit-lear
 
 Rules live in `backend/logic/playbackState.js` and are mirrored in `frontend/src/lib/sync.js`.
 
+## How screen share and local files work
+
+Only YouTube links can be played in sync by everyone's own player. For everything else (other websites, a file on your computer, an MP3) one person **shares** and everyone else **watches that stream**:
+
+- **Share screen or tab:** the browser's own picker opens. Choose a browser tab and tick "share tab audio" to share a Netflix, Hotstar or any other tab with sound.
+- **Play a local video or song:** pick a file. It plays on the sharer's computer and its picture and sound are captured and sent on. MP3 and other audio files show a "now playing" card. The sharer's player controls (pause, seek) control it for everyone, because everyone is watching the same stream.
+- One person shares at a time. While someone shares, YouTube is paused and its buttons are off. The room clock then counts seconds since the share began, so reactions and the recap still work (recap links for a share show times only, with no YouTube link).
+- Each share uses its own peer connection from the sharer to each viewer, separate from the camera calls, with video capped at 2.5 Mbit/s per viewer. The sharer's upload therefore grows with the number of viewers (up to 3).
+- Limits: sharing a screen needs a computer browser (phones cannot start one, but can watch). Tab audio works in Chrome and Edge. Sharing a local file needs a browser that can capture a media element (Chrome, Edge, Firefox). Files are never uploaded to a server.
+
 ## How the Don't Laugh round works
 
 1. **Calibrate**: each player holds a neutral face for 3 s. Threshold = max(0.35, mean + 2 standard deviations of their smile + 0.25). This stops people with naturally upturned mouths from losing at once.
@@ -146,7 +158,7 @@ _To fill in after deploying: the same load test and REST latency against the Ren
 
 ## Known bugs found by testing, and fixed
 
-These were found by running the app, not by reading it: the camera request was cancelled by its own state change (nobody's camera would have started in a real browser), call setup lost early network candidates, two simultaneous offers left one side with no ICE candidates (fixed by letting only one side of each pair make offers), a finished video restarted for everyone, and the room page overflowed on phones.
+These were found by running the app, not by reading it (the second list is from the full UI audit): the camera request was cancelled by its own state change (nobody's camera would have started in a real browser), call setup lost early network candidates, two simultaneous offers left one side with no ICE candidates (fixed by letting only one side of each pair make offers), a finished video restarted for everyone, the room page overflowed on phones, icon and emoji buttons were misaligned (a stylesheet loading order bug), chat sent during a reconnect was dropped silently, validation errors said only "Some fields are not valid", the join screen had no way back, and old empty parties crowded the recap list. While building file sharing: the file's temporary address was revoked by React's development double mount, and two code paths raced to connect to the same viewer.
 
 ## Tests
 
@@ -155,8 +167,10 @@ These were found by running the app, not by reading it: the camera request was c
 cd backend && npm test             # unit tests (logic, schemas, registry)
 cd backend && node scripts/e2e.mjs # live check, needs the server running and Atlas
 cd frontend/vite-project && npm test
-# two-browser call test, needs Playwright and a Chromium binary (see the header of the file)
-PLAYWRIGHT_FROM=/dir/with/node_modules/ CHROMIUM=/usr/bin/chromium node tests/browser/webrtc.mjs ./out
+# browser tests: need Playwright and a Chromium binary (see the header of each file)
+PLAYWRIGHT_FROM=/dir/with/node_modules/ CHROMIUM=/usr/bin/chromium node tests/browser/webrtc.mjs ./out   # two-person call
+PLAYWRIGHT_FROM=... CHROMIUM=... node tests/browser/audit.mjs ./out                                         # every page and button
+MEDIA=/dir/with/clip.mp4-and-"my song.mp3" PLAYWRIGHT_FROM=... CHROMIUM=... node tests/browser/share.mjs ./out  # screen, video file and MP3 sharing
 ```
 
 ## Local setup
