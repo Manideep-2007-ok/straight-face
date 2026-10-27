@@ -76,6 +76,10 @@ export default function SyncedPlayer({ playback, serverNow, started, onSet, onSe
   useEffect(() => {
     const p = playerRef.current;
     if (!ready || !p || !playback?.videoId || !started) return;
+    if (playback.videoId === 'screen-share') {
+      p.pauseVideo?.(); // a screen or file share is on stage, not YouTube
+      return;
+    }
     setError('');
     guard();
     const target = expectedPosition(playback, serverNow());
@@ -99,7 +103,7 @@ export default function SyncedPlayer({ playback, serverNow, started, onSet, onSe
     const id = setInterval(() => {
       const p = playerRef.current;
       const { playback: pb, serverNow: sn, started: st } = latest.current;
-      if (!p || !pb?.videoId || !st || applyingRemote.current) return;
+      if (!p || !pb?.videoId || pb.videoId === 'screen-share' || !st || applyingRemote.current) return;
       const t = p.getCurrentTime();
       cb.current.onPosition?.(t);
       const dt = (Date.now() - lastPos.current.at) / 1000;
@@ -125,10 +129,10 @@ export default function SyncedPlayer({ playback, serverNow, started, onSet, onSe
 
   return (
     <div style={{ position: 'relative', aspectRatio: '16 / 9', background: '#000', borderRadius: 'var(--radius-stage)', overflow: 'hidden', boxShadow: '0 0 calc(40px + 120px * var(--room-glow)) calc(10px * var(--room-glow)) color-mix(in srgb, var(--glow) calc(55% * var(--room-glow)), transparent)' }}>
-      <div style={{ position: 'absolute', inset: 0, visibility: playback?.videoId ? 'visible' : 'hidden' }}>
+      <div style={{ position: 'absolute', inset: 0, visibility: playback?.videoId && playback.videoId !== 'screen-share' ? 'visible' : 'hidden' }}>
         <div ref={hostRef} style={{ width: '100%', height: '100%' }} />
       </div>
-      {!playback?.videoId && !error && (
+      {(!playback?.videoId || playback.videoId === 'screen-share') && !error && (
         <div className="muted" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', padding: 'var(--s6)', textAlign: 'center', pointerEvents: 'none' }}>
           Paste a YouTube link below to start.
         </div>

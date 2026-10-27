@@ -4,6 +4,7 @@ import { api } from '../lib/api.js';
 import '../styles/recap.css';
 
 const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+const isYouTube = (id) => /^[A-Za-z0-9_-]{11}$/.test(id);
 const ytLink = (videoId, t) => `https://www.youtube.com/watch?v=${videoId}&t=${Math.floor(t)}s`;
 
 // Heat strip: one amber bar per second, opacity = how many people cracked up. Peaks get a flag.
@@ -19,13 +20,17 @@ function HeatStrip({ strip }) {
       </svg>
       <div className="flags">
         {peaks.map((p) => (
-          <a key={p.t} className="flag mono" style={{ left: `${(p.t / length) * 100}%` }} href={ytLink(videoId, p.t)} target="_blank" rel="noreferrer" title="Open the video at this moment">
-            {fmt(p.t)}
-          </a>
+          isYouTube(videoId) ? (
+            <a key={p.t} className="flag mono" style={{ left: `${(p.t / length) * 100}%` }} href={ytLink(videoId, p.t)} target="_blank" rel="noreferrer" title="Open the video at this moment">
+              {fmt(p.t)}
+            </a>
+          ) : (
+            <span key={p.t} className="flag mono" style={{ left: `${(p.t / length) * 100}%` }} title="Seconds into the shared screen or file">{fmt(p.t)}</span>
+          )
         ))}
       </div>
       <figcaption className="muted">
-        {peaks.length ? 'Brighter means more of the room cracked up. Click a time to jump to it on YouTube.' : 'No big laughs this time.'}
+        {peaks.length ? `Brighter means more of the room cracked up.${isYouTube(videoId) ? ' Click a time to jump to it on YouTube.' : ' This was a shared screen or file, so the times count from when sharing began.'}` : 'No big laughs this time.'}
       </figcaption>
     </figure>
   );
@@ -117,7 +122,7 @@ export default function Recap() {
               <h2>Chattiest moments</h2>
               <ul className="plain">
                 {recap.chatMoments.map((m) => (
-                  <li key={`${m.videoId}${m.t}`}><a className="mono" href={ytLink(m.videoId, m.t)} target="_blank" rel="noreferrer">{fmt(m.t)}</a> · {m.count} message{m.count > 1 ? "s" : ""}, like "{m.sample}"</li>
+                  <li key={`${m.videoId}${m.t}`}>{isYouTube(m.videoId) ? <a className="mono" href={ytLink(m.videoId, m.t)} target="_blank" rel="noreferrer">{fmt(m.t)}</a> : <span className="mono">{fmt(m.t)}</span>} · {m.count} message{m.count > 1 ? "s" : ""}, like "{m.sample}"</li>
                 ))}
               </ul>
             </section>

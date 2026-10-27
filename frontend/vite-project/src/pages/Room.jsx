@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Mic, MicOff, Video, VideoOff } from 'lucide-react';
+import { Mic, MicOff, Video, VideoOff, MonitorUp, FileVideo } from 'lucide-react';
 import { useRoom } from '../hooks/useRoom.js';
 import { useWebRTC } from '../hooks/useWebRTC.js';
+import { useShare } from '../hooks/useShare.js';
+import ShareStage from '../components/ShareStage.jsx';
 import Tile from '../components/Tile.jsx';
 import DontLaugh from '../components/DontLaugh.jsx';
 import { FloatingEmoji, FaceReactions, EMOJIS, useFloaters } from '../components/Reactions.jsx';
@@ -36,13 +38,27 @@ export default function Room() {
   const [linkError, setLinkError] = useState('');
   const [text, setText] = useState('');
   const [copied, setCopied] = useState(false);
+  const [chatError, setChatError] = useState('');
   const [myPos, setMyPos] = useState(0);
   const [peek, setPeek] = useState(false);
   const chatEnd = useRef(null);
   const posRef = useRef(0);
   const [faceOn, setFaceOn] = useState(false);
   const floaters = useFloaters(room.socket);
+  const [file, setFile] = useState(null); // a local video/audio file the user picked to share
+  const fileInput = useRef(null);
   const rtc = useWebRTC({ socketRef: room.socket, me: room.me, members: room.members, enabled: started && room.status === 'joined' });
+
+  const sh = useShare({ socketRef: room.socket, me: room.me, members: room.members, share: room.share, emit: room.emit });
+  // The file player goes away when a share that was running ends (not before it has started).
+  const hadShare = useRef(false);
+  useEffect(() => {
+    if (room.share) hadShare.current = true;
+    else if (hadShare.current) {
+      hadShare.current = false;
+      setFile(null);
+    }
+  }, [room.share]);
 
   const { shown, hidden } = visibleMessages(room.chat, myPos, room.playback?.videoId);
   const messages = peek ? room.chat : shown;
@@ -68,6 +84,7 @@ export default function Room() {
             {room.members.length} in the room: {room.members.map((m) => m.name).join(', ')}.
           </p>
           <button className="btn btn-primary" onClick={() => setStarted(true)}>Join the party</button>
+          <Link to="/home" className="btn btn-ghost" style={{ display: 'inline-grid', placeItems: 'center', textDecoration: 'none' }}>Back to your rooms</Link>
           <p className="muted" style={{ fontSize: '0.875rem' }}>
             This click lets your browser play sound. You can catch up to the right second right after.
           </p>
@@ -81,6 +98,7 @@ export default function Room() {
 
   function loadVideo(e) {
     e.preventDefault();
+    if (room.share) return setLinkError(`${room.share.name} is sharing. Wait until the share stops to play a YouTube video.`);
     const id = parseYouTubeId(link);
     if (!id) return setLinkError('That does not look like a YouTube link. Paste the video address.');
     setLinkError('');
@@ -99,10 +117,17 @@ export default function Room() {
     setLink('');
   }
 
-  function send(e) {
+  async function send(e) {
     e.preventDefault();
-    if (!text.trim()) return;
-    room.sendChat(text.trim());
+    const msg = text.trim();
+    if (!msg) return;
+    setChatError('');
+    const r = await room.sendChat(msg);
+    if (r?.error) {
+      // keep the text so nothing is lost
+      setChatError(r.error === 'RATE_LIMITED' ? 'You are sending too fast. Wait a moment.' : 'Message not sent. Check your connection and try again.');
+      return;
+    }
     setText('');
   }
 
@@ -139,6 +164,21 @@ export default function Room() {
             setMyPos(t);
           }}
           onEnded={() => room.emit('dl:stop')}
+        />
+        <ShareStage
+          share={room.share}
+          me={room.me}
+          remoteStream={sh.remoteStream}
+          file={file}
+          onFileStream={async (stream) => {
+            const ok = await sh.startShare('file', stream, file?.name);
+            if (!ok) setFile(null);
+          }}
+          onFileFail={(msg) => {
+            sh.setError(msg);
+            setFile(null);
+          }}
+          onStop={() => sh.stopShare(true)}
         />
         <FloatingEmoji items={floaters} />
         </div>
@@ -190,10 +230,32 @@ export default function Room() {
             Face reactions: {faceOn ? 'on' : 'off'}
           </button>
           <FaceReactions enabled={faceOn} paused={room.round.phase !== 'idle' && room.round.phase !== 'ended'} stream={rtc.localStream} emit={room.emit} getPosition={() => posRef.current} />
+          <button className="btn share-btn" onClick={sh.shareScreen} disabled={!!room.share}>
+            <MonitorUp size={18} aria-hidden="true" /> Share screen or tab
+          </button>
+          <button className="btn share-btn" onClick={() => fileInput.current?.click()} disabled={!!room.share}>
+            <FileVideo size={18} aria-hidden="true" /> Play a local video or song
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept="video/*,audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac,.mp4,.webm,.mkv,.mov"
+            className="sr-only"
+            aria-label="Choose a video or audio file to play for the room"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (!f) return;
+              sh.setError('');
+              setFile(f);
+            }}
+          />
           {rtc.media === 'asking' && <span className="muted">Waiting for camera permission…</span>}
           {rtc.media === 'denied' && <span className="muted">Camera blocked. You are watching from the sidelines. Chat still works.</span>}
           {rtc.media === 'none' && <span className="muted">No camera found. You are watching from the sidelines.</span>}
         </div>
+        {sh.error && <p className="error-text" role="alert">{sh.error}</p>}
+        {room.share && !sh.iAmSharing && <p className="muted" role="status">{room.share.name} is sharing. YouTube is paused until they stop.</p>}
         {rtc.media === 'live' && <p className="muted privacy-note">Your camera is read in your browser. Only numbers (how much you are smiling) are shared, and only while face reactions or a game are on.</p>}
         <p className="muted action-line" aria-live="polite">{action}</p>
 
@@ -208,7 +270,7 @@ export default function Room() {
         <section className="queue" aria-label="Up next">
           <div className="row" style={{ justifyContent: 'space-between' }}>
             <h2 style={{ fontSize: '1.0625rem' }}>Up next</h2>
-            {room.queue.length > 0 && <button className="btn btn-ghost" onClick={() => room.emit('queue:next')}>Play the top video</button>}
+            {room.queue.length > 0 && <button className="btn btn-ghost" disabled={!!room.share} onClick={() => room.emit('queue:next')}>Play the top video</button>}
           </div>
           {room.queue.length === 0 && <p className="muted">Nothing queued. Add a video, then everyone votes for what plays next.</p>}
           <ul className="queue-list">
@@ -242,6 +304,7 @@ export default function Room() {
           )}
           <li ref={chatEnd} />
         </ul>
+        {chatError && <p className="error-text" role="alert" style={{ margin: 'var(--s2) 0 0' }}>{chatError}</p>}
         <form className="row chat-form" onSubmit={send}>
           <label htmlFor="msg" className="sr-only">Message</label>
           <input id="msg" className="grow" value={text} onChange={(e) => setText(e.target.value)} maxLength={500} placeholder="Message" autoComplete="off" />

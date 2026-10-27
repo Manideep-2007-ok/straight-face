@@ -158,6 +158,7 @@ export function useWebRTC({ socketRef, me, members, enabled }) {
     const socket = socketRef.current;
     if (!socket || !me) return undefined;
     const onSignal = (m) => {
+      if (m.channel === 'screen') return; // belongs to screen sharing (useShare)
       queueRef.current.push(m);
       if (readyRef.current) queueRef.current.splice(0).forEach(process);
     };
