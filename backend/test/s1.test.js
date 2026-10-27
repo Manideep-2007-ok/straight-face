@@ -18,6 +18,19 @@ test('config: CLIENT_URL can list several frontends', () => {
   assert.deepEqual(c.allowedOrigins, ['https://a.onrender.com', 'https://b.vercel.app', 'http://localhost:5173']);
 });
 
+test('config: finds the database address under a differently written name, and never prints its value', () => {
+  const c = parseConfig({ JWT_SECRET: 'a'.repeat(16), DBURL: 'mongodb://secret-host/x' });
+  assert.equal(c.dbURL, 'mongodb://secret-host/x');
+  assert.equal(parseConfig({ JWT_SECRET: 'a'.repeat(16), Mongodb_Uri: ' mongodb://h/y ' }).dbURL, 'mongodb://h/y');
+  try {
+    parseConfig({ JWT_SECRET: 'a'.repeat(16), my_db_thing: 'mongodb://secret-host/x' });
+    assert.fail('should throw');
+  } catch (e) {
+    assert.match(e.message, /my_db_thing/); // the NAME is shown to help debugging
+    assert.doesNotMatch(e.message, /secret-host/); // the value never is
+  }
+});
+
 test('config: rejects missing dbURL and a short JWT_SECRET', () => {
   assert.throws(() => parseConfig({ JWT_SECRET: 'a'.repeat(16) }), /dbURL/);
   assert.throws(() => parseConfig({ dbURL: 'x', JWT_SECRET: 'short' }), /JWT_SECRET/);

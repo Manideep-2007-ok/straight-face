@@ -13,10 +13,24 @@ const schema = z.object({
   TURN_CREDENTIAL: z.string().optional(),
 });
 
-export function parseConfig(env = process.env) {
+// The database address is called dbURL here, but be forgiving about the name: people type DBURL, MONGODB_URI, db_url...
+const DB_NAMES = ['dburl', 'db_url', 'mongodb_uri', 'mongo_uri', 'mongourl', 'mongo_url', 'mongodb_url', 'database_url'];
+function withDbUrl(env) {
+  if (env.dbURL) return env;
+  const key = Object.keys(env).find((k) => DB_NAMES.includes(k.trim().toLowerCase()) && env[k]);
+  return key ? { ...env, dbURL: env[key].trim() } : env;
+}
+
+export function parseConfig(rawEnv = process.env) {
+  const env = withDbUrl(rawEnv);
   const result = schema.safeParse(env);
   if (!result.success) {
     const lines = result.error.issues.map((i) => `  ${i.path.join('.')}: ${i.message}`);
+    if (result.error.issues.some((i) => i.path[0] === 'dbURL')) {
+      // Names only, never values: helps spot a typo in the variable name.
+      const near = Object.keys(rawEnv).filter((k) => /db|mongo|database/i.test(k));
+      lines.push(`  (looked for dbURL, also ${DB_NAMES.join(', ')} in any capitalisation; variables mentioning db/mongo: ${near.length ? near.map((k) => JSON.stringify(k)).join(', ') : 'none'})`);
+    }
     throw new Error(`Invalid environment:\n${lines.join('\n')}`);
   }
   const c = result.data;
