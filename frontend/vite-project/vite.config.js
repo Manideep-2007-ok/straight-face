@@ -14,6 +14,8 @@ const proxy = target
 
 export default defineConfig({
   plugins: [react()],
+  // The commit this build was made from (Render provides it), shown in the corner and used to spot stale tabs.
+  define: { __BUILD__: JSON.stringify((process.env.RENDER_GIT_COMMIT || 'dev').slice(0, 7)) },
   server: { port: 5173 },
   // `vite preview` serves the built app on Render; allow its onrender.com host name.
   preview: { allowedHosts: true, ...(proxy ? { proxy } : {}) },

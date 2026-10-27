@@ -5,6 +5,7 @@ import AuthPage from './pages/AuthPage.jsx';
 import Home from './pages/Home.jsx';
 import Room from './pages/Room.jsx';
 import Recap from './pages/Recap.jsx';
+import UpdateBanner from './components/UpdateBanner.jsx';
 
 function Protected({ children }) {
   const { user, loading } = useAuth();
@@ -16,6 +17,8 @@ function Protected({ children }) {
 
 export default function App() {
   return (
+    <>
+    <UpdateBanner />
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<AuthPage mode="login" />} />
@@ -25,5 +28,6 @@ export default function App() {
       <Route path="/room/:code/recap/:id?" element={<Protected><Recap /></Protected>} />
       <Route path="*" element={<div className="center-screen"><p>Page not found. <a href="/">Go home</a></p></div>} />
     </Routes>
+    </>
   );
 }

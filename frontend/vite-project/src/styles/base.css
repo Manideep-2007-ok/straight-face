@@ -95,3 +95,7 @@ a { color: var(--glow); }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }
+
+.update-banner { position: fixed; z-index: 50; left: 50%; bottom: var(--s4); transform: translateX(-50%); display: flex; gap: var(--s3); align-items: center; padding: var(--s2) var(--s2) var(--s2) var(--s4); background: var(--glow); color: var(--on-glow); border-radius: 999px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5); max-width: calc(100% - 2rem); }
+.update-banner .btn { background: var(--on-glow); color: var(--glow); min-height: 36px; }
+.build-label { position: fixed; right: var(--s2); bottom: var(--s1); font: 400 0.6875rem var(--font-mono); color: var(--muted); opacity: 0.6; pointer-events: none; z-index: 5; }
