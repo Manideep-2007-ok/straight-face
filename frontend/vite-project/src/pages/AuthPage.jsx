@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth.jsx';
 
 export default function AuthPage({ mode }) {
   const isSignup = mode === 'signup';
-  const { login, signup } = useAuth();
+  const { login, signup, notice } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [form, setForm] = useState({ name: '', email: '', password: '' });
@@ -46,6 +46,7 @@ export default function AuthPage({ mode }) {
           <label htmlFor="password">Password {isSignup && '(8 or more characters)'}</label>
           <input id="password" type="password" value={form.password} onChange={set('password')} autoComplete={isSignup ? 'new-password' : 'current-password'} required />
         </div>
+        {notice && !error && <p className="error-text" role="alert">{notice}</p>}
         {error && <p className="error-text" role="alert">{error}</p>}
         <button className="btn btn-primary" style={{ width: '100%' }} disabled={busy}>
           {busy ? 'Please wait…' : isSignup ? 'Create account' : 'Log in'}

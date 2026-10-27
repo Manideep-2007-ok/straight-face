@@ -23,6 +23,7 @@ async function request(path, { method = 'GET', body } = {}) {
   }
   const json = await res.json().catch(() => null);
   if (!res.ok) {
+    if (res.status === 401 && json?.error?.code === 'SESSION_REPLACED') window.dispatchEvent(new Event('session-replaced'));
     throw new ApiError(res.status, json?.error?.code || 'ERROR', json?.error?.message || 'Something went wrong.');
   }
   return json.data;
