@@ -259,7 +259,7 @@ export default function Room() {
         </div>
         {sh.error && <p className="error-text" role="alert">{sh.error}</p>}
         {room.share && !sh.iAmSharing && <p className="muted" role="status">{room.share.name} is sharing. YouTube is paused until they stop.</p>}
-        {rtc.media === 'live' && <p className="muted privacy-note">Your camera is read in your browser. Only numbers (how much you are smiling) are shared, and only while face reactions or a game are on.</p>}
+        {rtc.media === 'live' && <p className="muted privacy-note">Your camera is read in your browser. Only a few numbers (like how much you are smiling or surprised) are shared, and only while face reactions or a game are on.</p>}
         <p className="muted action-line" aria-live="polite">{action}</p>
 
         <form className="row" onSubmit={loadVideo}>

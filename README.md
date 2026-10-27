@@ -65,7 +65,7 @@ With **Face reactions** switched on, the app first learns your resting face for 
 ## What is pretrained and what is trained
 
 - Face reading uses **MediaPipe FaceLandmarker, a pretrained model from Google**. Nothing in it was trained by this project.
-- The smile score is the mean of the two `mouthSmile` blendshapes. The surprise score is a scaled mean of `jawOpen`, `eyeWide` and `browInnerUp`.
+- The smile score is the mean of the two `mouthSmile` blendshapes. The surprise score is a weighted mean of `jawOpen` and the two `eyeWide` values, scaled; anger, disgust, tongue, kiss and wink have their own formulas (see "What expressions it recognises").
 - The "laugh" in Reaction Radar is a **smile score**, not an audio laugh detector.
 - There is also a small CNN trained on FER2013 in `/model`. It is optional (`VITE_EMOTION_ENGINE=custom`) and described in the model card below.
 
@@ -116,7 +116,7 @@ Each login makes a new session id, and only the newest one is valid. Opening the
 ## Privacy
 
 - No video, audio or image is recorded, stored, or sent to our server. The camera is read in your browser.
-- Only numbers leave your browser, and only while face reactions are switched on or a game is running: a smile score, a surprise score, and a one-time "I'm out" event.
+- Only numbers leave your browser, and only while face reactions are switched on or a game is running: a smile score and a surprise score once a second, the emoji your face triggers, and a one-time "I'm out" event.
 - Face reactions are off by default. People with the camera off can still watch and chat.
 - Voice and video travel directly between browsers (WebRTC). If a direct link is blocked, a TURN relay forwards the encrypted stream.
 
