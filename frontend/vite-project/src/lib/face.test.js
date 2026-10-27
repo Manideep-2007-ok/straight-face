@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  scoresFromBlendshapes, makeEma, calibrationThreshold, makeSmileDetector, autoReaction, makeCooldown, MIN_THRESHOLD,
+  scoresFromBlendshapes, makeEma, calibrationThreshold, makeSmileDetector, pickReaction, reactionThresholds, makeHold, REACTIONS, makeCooldown, MIN_THRESHOLD,
 } from './face.js';
 
 test('scoresFromBlendshapes: smile is the mean of both mouth corners, all clamped to 0..1', () => {
@@ -40,11 +40,52 @@ test('smile detector needs 3 consecutive frames and fires only once', () => {
   assert.equal(d.fired, true);
 });
 
-test('auto reactions pick laugh > smile > surprise and respect the threshold', () => {
-  assert.equal(autoReaction({ smile: 0.9, surprise: 0.9 }, 0.4).emoji, '😂');
-  assert.equal(autoReaction({ smile: 0.45, surprise: 0 }, 0.4).emoji, '😄');
-  assert.equal(autoReaction({ smile: 0.1, surprise: 0.7 }, 0.4).emoji, '😮');
-  assert.equal(autoReaction({ smile: 0.1, surprise: 0.2 }, 0.4), null);
+test('scores: every expression is 0..1 and comes from the right blendshapes', () => {
+  const s = scoresFromBlendshapes({ jawOpen: 0.7, eyeWideLeft: 0.5, eyeWideRight: 0.5, browDownLeft: 0.8, browDownRight: 0.8, tongueOut: 0.6, mouthPucker: 0.9, eyeBlinkLeft: 0.9, eyeBlinkRight: 0.05 });
+  for (const v of Object.values(s)) assert.ok(v >= 0 && v <= 1);
+  assert.ok(s.surprise > 0.6 && s.angry === 0.8 && s.tongue === 0.6 && s.kiss === 0.9 && Math.abs(s.wink - 0.85) < 1e-9);
+  assert.equal(scoresFromBlendshapes({}).surprise, 0);
+});
+
+test('thresholds: personal resting level raises them, an empty calibration falls back to the minimums', () => {
+  const none = reactionThresholds([]);
+  for (const k of Object.keys(REACTIONS)) assert.equal(none[k], REACTIONS[k].min);
+  const brooding = Array.from({ length: 20 }, () => ({ angry: 0.4, surprise: 0.05, kiss: 0.1, disgust: 0, tongue: 0, wink: 0 }));
+  const th = reactionThresholds(brooding);
+  assert.ok(th.angry >= 0.4 + 0.25 - 1e-9, `naturally low brows need a bigger frown: ${th.angry}`);
+  assert.equal(th.surprise, REACTIONS.surprise.min);
+  assert.ok(th.angry <= 0.95);
+});
+
+test('pickReaction: each gesture gives its own emoji, neutral gives nothing', () => {
+  const th = reactionThresholds([]);
+  const base = { smile: 0, surprise: 0, angry: 0, disgust: 0, tongue: 0, kiss: 0, wink: 0 };
+  assert.equal(pickReaction(base, th, 0.4), null);
+  assert.equal(pickReaction({ ...base, smile: 0.95 }, th, 0.4).emoji, '😂');
+  assert.equal(pickReaction({ ...base, smile: 0.5 }, th, 0.4).emoji, '😄');
+  assert.equal(pickReaction({ ...base, surprise: 0.7 }, th, 0.4).emoji, '😮');
+  assert.equal(pickReaction({ ...base, angry: 0.8 }, th, 0.4).emoji, '😠');
+  assert.equal(pickReaction({ ...base, disgust: 0.6 }, th, 0.4).emoji, '🤢');
+  assert.equal(pickReaction({ ...base, tongue: 0.6 }, th, 0.4).emoji, '😛');
+  assert.equal(pickReaction({ ...base, kiss: 0.8 }, th, 0.4).emoji, '😘');
+  assert.equal(pickReaction({ ...base, wink: 0.9 }, th, 0.4).emoji, '😉');
+});
+
+test('pickReaction: a smile does not count as disgust or anger, and the strongest expression wins', () => {
+  const th = reactionThresholds([]);
+  const base = { smile: 0, surprise: 0, angry: 0, disgust: 0, tongue: 0, kiss: 0, wink: 0 };
+  assert.equal(pickReaction({ ...base, smile: 0.3, disgust: 0.9 }, th, 0.6)?.emoji, undefined); // smile under its threshold, disgust blocked
+  assert.equal(pickReaction({ ...base, surprise: 0.4, tongue: 0.9 }, th, 0.4).emoji, '😛'); // tongue is further above its threshold
+});
+
+test('hold: an expression must last two frames, and a different one restarts the count', () => {
+  const hold = makeHold(2);
+  const a = { kind: 'surprise', emoji: '😮' };
+  assert.equal(hold(a), null);
+  assert.equal(hold(a)?.kind, 'surprise');
+  assert.equal(hold({ kind: 'angry', emoji: '😠' }), null);
+  assert.equal(hold(null), null);
+  assert.equal(hold(a), null);
 });
 
 test('cooldown allows one reaction per kind every 4 s', () => {

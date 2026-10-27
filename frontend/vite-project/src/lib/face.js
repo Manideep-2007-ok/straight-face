@@ -7,13 +7,23 @@ export const EMA_ALPHA = 0.4;
 const clamp01 = (x) => Math.max(0, Math.min(1, x));
 const mean = (a) => a.reduce((s, x) => s + x, 0) / (a.length || 1);
 
-// MediaPipe blendshape categories -> { smile, surprise } in 0..1.
+// MediaPipe blendshape categories -> expression scores in 0..1.
 // `shapes` is an object like { mouthSmileLeft: 0.4, jawOpen: 0.1, ... }.
+// The formulas were chosen by measuring MediaPipe on labelled faces (see the README): surprise = open jaw + wide eyes
+// scored 0.94 (area under the ROC curve), disgust = nose wrinkle + raised lip + lowered brows 0.85, angry = lowered brows 0.65.
+// Sad could not be told apart from neutral (0.5, chance) so it is NOT detected.
 export function scoresFromBlendshapes(shapes) {
   const g = (k) => shapes[k] ?? 0;
-  const smile = clamp01((g('mouthSmileLeft') + g('mouthSmileRight')) / 2);
-  const surprise = clamp01(mean([g('jawOpen'), g('eyeWideLeft'), g('eyeWideRight'), g('browInnerUp')]) * 1.6);
-  return { smile, surprise };
+  const w = (pairs) => pairs.reduce((s, [k, wt]) => s + g(k) * wt, 0) / pairs.reduce((s, [, wt]) => s + wt, 0);
+  return {
+    smile: clamp01((g('mouthSmileLeft') + g('mouthSmileRight')) / 2),
+    surprise: clamp01(w([['jawOpen', 2], ['eyeWideLeft', 1], ['eyeWideRight', 1]]) * 1.5),
+    angry: clamp01((g('browDownLeft') + g('browDownRight')) / 2),
+    disgust: clamp01(w([['noseSneerLeft', 2], ['noseSneerRight', 2], ['mouthUpperUpLeft', 1], ['mouthUpperUpRight', 1], ['browDownLeft', 1], ['browDownRight', 1]]) * 1.5),
+    tongue: clamp01(g('tongueOut')),
+    kiss: clamp01(g('mouthPucker')),
+    wink: clamp01(Math.abs(g('eyeBlinkLeft') - g('eyeBlinkRight'))),
+  };
 }
 
 export function makeEma(alpha = EMA_ALPHA) {
@@ -55,12 +65,58 @@ export function makeSmileDetector(threshold, hold = HOLD_FRAMES) {
   };
 }
 
-// Auto reactions (plan 6.4): which emoji, if any, a frame should trigger.
-export function autoReaction({ smile, surprise }, threshold) {
-  if (smile >= threshold + 0.2) return { kind: 'laugh', emoji: '😂', strength: smile };
-  if (smile >= threshold) return { kind: 'smile', emoji: '😄', strength: smile };
-  if (surprise >= 0.6) return { kind: 'surprise', emoji: '😮', strength: surprise };
-  return null;
+// ---- Reactions -----------------------------------------------------------------------------------------------------
+// Every expression has a lowest possible threshold, a margin above the person's own resting face, and an emoji.
+export const REACTIONS = {
+  surprise: { emoji: '😮', min: 0.3, margin: 0.15 },
+  angry: { emoji: '😠', min: 0.55, margin: 0.25 },
+  disgust: { emoji: '🤢', min: 0.35, margin: 0.2 },
+  tongue: { emoji: '😛', min: 0.35, margin: 0.1 },
+  kiss: { emoji: '😘', min: 0.55, margin: 0.3 },
+  wink: { emoji: '😉', min: 0.6, margin: 0.3 },
+};
+const NAMES = Object.keys(REACTIONS);
+
+// A person's own thresholds from ~3 s of neutral frames (each frame is an object of scores): resting level + margin.
+// Without samples, the lowest possible thresholds are used.
+export function reactionThresholds(frames = []) {
+  const th = {};
+  for (const k of NAMES) {
+    const xs = frames.map((f) => f[k] ?? 0);
+    const m = mean(xs);
+    const sd = xs.length ? Math.sqrt(mean(xs.map((x) => (x - m) ** 2))) : 0;
+    th[k] = Math.min(0.95, Math.max(REACTIONS[k].min, xs.length ? m + 3 * sd + REACTIONS[k].margin : 0));
+  }
+  return th;
+}
+
+// Which expression, if any, is this frame showing? The one furthest above its own threshold wins.
+// A smile blocks disgust and anger (a smile also raises the upper lip and can look like a brow shift).
+export function pickReaction(scores, th, smileThreshold) {
+  if (scores.smile >= smileThreshold + 0.2) return { kind: 'laugh', emoji: '😂', strength: scores.smile };
+  if (scores.smile >= smileThreshold) return { kind: 'smile', emoji: '😄', strength: scores.smile };
+  let best = null;
+  for (const k of NAMES) {
+    if ((k === 'disgust' || k === 'angry') && scores.smile > 0.25) continue;
+    const x = scores[k] ?? 0;
+    if (x >= th[k]) {
+      const ratio = x / th[k];
+      if (!best || ratio > best.ratio) best = { kind: k, emoji: REACTIONS[k].emoji, strength: Math.min(1, x), ratio };
+    }
+  }
+  return best && { kind: best.kind, emoji: best.emoji, strength: best.strength };
+}
+
+// An expression must hold for a couple of frames before it counts (a blink or a mouth twitch should not).
+export function makeHold(frames = 2) {
+  let kind = null;
+  let run = 0;
+  return (r) => {
+    const k = r?.kind ?? null;
+    run = k && k === kind ? run + 1 : k ? 1 : 0;
+    kind = k;
+    return k && run >= frames ? r : null;
+  };
 }
 
 // Per-kind cooldown so reactions do not spam.

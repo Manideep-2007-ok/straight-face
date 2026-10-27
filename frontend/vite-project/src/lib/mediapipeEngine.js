@@ -27,8 +27,7 @@ export const mediapipeEngine = {
   preload: getLandmarker,
   async start(video, onFrame) {
     const landmarker = await getLandmarker();
-    const smileEma = makeEma();
-    const surpriseEma = makeEma();
+    const emas = {}; // one smoother per expression
     let lastVideoTime = -1;
     const timer = setInterval(() => {
       if (video.readyState < 2 || video.videoWidth === 0 || video.currentTime === lastVideoTime) return;
@@ -43,7 +42,9 @@ export const mediapipeEngine = {
       if (!cats) return onFrame({ smile: 0, surprise: 0, faceFound: false });
       const shapes = Object.fromEntries(cats.map((c) => [c.categoryName, c.score]));
       const raw = scoresFromBlendshapes(shapes);
-      onFrame({ smile: smileEma(raw.smile), surprise: surpriseEma(raw.surprise), faceFound: true });
+      const out = { faceFound: true };
+      for (const [k, v] of Object.entries(raw)) out[k] = (emas[k] ||= makeEma())(v);
+      onFrame(out);
     }, 1000 / FPS);
     return () => clearInterval(timer);
   },
