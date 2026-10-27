@@ -16,6 +16,7 @@ export function useRoom(code) {
   const [members, setMembers] = useState([]);
   const [chat, setChat] = useState([]);
   const [queue, setQueue] = useState([]);
+  const [share, setShare] = useState(null);
   const [level, setLevel] = useState(0);
   const [round, setRound] = useState({ phase: 'idle', players: [], winners: [] });
 
@@ -49,12 +50,13 @@ export function useRoom(code) {
       setChat(r.chat);
       if (r.round) setRound(r.round);
       if (r.queue) setQueue(r.queue);
+      setShare(r.share || null);
       setStatus('joined');
+      setOnline(true); // only now: before this, sending would be refused by the server
     }
 
     socket.on('connect', () => {
-      setOnline(true);
-      join();
+      join(); // "online" turns true once the room has been re-entered
     });
     socket.on('disconnect', () => setOnline(false));
     socket.on('connect_error', (e) => {
@@ -65,6 +67,7 @@ export function useRoom(code) {
     socket.on('play:state', setPlayback);
     socket.on('dl:state', setRound);
     socket.on('queue:state', setQueue);
+    socket.on('share:state', setShare);
     socket.on('radar:live', (r) => setLevel(r.level));
     socket.on('chat:new', (m) => setChat((c) => [...c.slice(-199), m]));
 
@@ -90,6 +93,7 @@ export function useRoom(code) {
     chat,
     round,
     queue,
+    share,
     level,
     emit,
     serverNow,
