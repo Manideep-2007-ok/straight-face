@@ -20,10 +20,11 @@ export function parseConfig(env = process.env) {
     throw new Error(`Invalid environment:\n${lines.join('\n')}`);
   }
   const c = result.data;
-  const clientUrl = c.CLIENT_URL.replace(/\/$/, '');
+  // CLIENT_URL may hold several frontend addresses separated by commas (e.g. Render and Vercel).
+  const clientUrls = c.CLIENT_URL.split(',').map((u) => u.trim().replace(/\/$/, '')).filter(Boolean);
   return {
     ...c,
     isProd: c.NODE_ENV === 'production',
-    allowedOrigins: [...new Set([clientUrl, 'http://localhost:5173'])],
+    allowedOrigins: [...new Set([...clientUrls, 'http://localhost:5173'])],
   };
 }

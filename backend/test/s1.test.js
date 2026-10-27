@@ -13,6 +13,11 @@ test('config: accepts a valid env and strips trailing slash from CLIENT_URL', ()
   assert.equal(c.isProd, false);
 });
 
+test('config: CLIENT_URL can list several frontends', () => {
+  const c = parseConfig({ ...goodEnv, CLIENT_URL: 'https://a.onrender.com/, https://b.vercel.app' });
+  assert.deepEqual(c.allowedOrigins, ['https://a.onrender.com', 'https://b.vercel.app', 'http://localhost:5173']);
+});
+
 test('config: rejects missing dbURL and a short JWT_SECRET', () => {
   assert.throws(() => parseConfig({ JWT_SECRET: 'a'.repeat(16) }), /dbURL/);
   assert.throws(() => parseConfig({ dbURL: 'x', JWT_SECRET: 'short' }), /JWT_SECRET/);
