@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
-import { isRelayed, limitSenders, SHARE_LIMITS } from '../lib/relay.js';
+import { isRelayed, limitSenders, withoutRelay, SHARE_LIMITS } from '../lib/relay.js';
 
 // Screen / tab / local-file sharing. One person shares at a time. The sharer opens a SEPARATE peer connection to
 // each other person (channel "screen"), always as the offerer, so it never collides with the camera calls.
@@ -39,14 +39,23 @@ export function useShare({ socketRef, me, members, share, emit }) {
 
   // ---- sharer side: connect to one person
   const connectTo = useCallback(
-    async (id) => {
+    async (id, relay = false) => {
       const stream = localRef.current;
       if (!stream || sending.current.has(id)) return;
       // Reserve the slot BEFORE awaiting anything, or two callers can both pass the check above and send two offers.
       const entry = { pc: null, pending: [] };
       sending.current.set(id, entry);
-      const pc = new RTCPeerConnection({ iceServers: await iceServers() });
+      // Direct first; the relay server is only added if a direct connection has not worked after a few seconds.
+      const all = await iceServers();
+      const pc = new RTCPeerConnection({ iceServers: relay ? all : withoutRelay(all) });
       entry.pc = pc;
+      const escalate = () => {
+        if (relay || sending.current.get(id) !== entry || localRef.current !== stream) return;
+        pc.close();
+        sending.current.delete(id);
+        connectTo(id, true);
+      };
+      if (!relay) setTimeout(() => pc.connectionState !== 'connected' && escalate(), 6000);
       if (sending.current.get(id) !== entry || localRef.current !== stream) {
         pc.close(); // sharing stopped, or this person left, while we were setting up
         return;
@@ -55,7 +64,9 @@ export function useShare({ socketRef, me, members, share, emit }) {
       // A share that has to go through the relay server is sent at a lower quality (its monthly allowance is small).
       pc.onconnectionstatechange = () => {
         if (pc.connectionState === 'connected') isRelayed(pc).then((relayed) => relayed && limitSenders(pc, SHARE_LIMITS));
+        if (pc.connectionState === 'failed') setTimeout(() => entryEscalate(), 0);
       };
+      const entryEscalate = () => escalate();
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
       // cap the video bitrate so four people can share over a normal home upload
       pc.getSenders().forEach((snd) => {
@@ -66,7 +77,7 @@ export function useShare({ socketRef, me, members, share, emit }) {
         snd.setParameters(params).catch(() => {});
       });
       await pc.setLocalDescription(await pc.createOffer());
-      send(id, 'offer', pc.localDescription);
+      send(id, 'offer', { type: pc.localDescription.type, sdp: pc.localDescription.sdp, relay }); // tells the viewer whether to use the relay too
     },
     [iceServers, send],
   );
@@ -135,12 +146,13 @@ export function useShare({ socketRef, me, members, share, emit }) {
       try {
         if (type === 'offer') {
           closeReceiving();
-          const pc = new RTCPeerConnection({ iceServers: await iceServers() });
+          const all = await iceServers();
+          const pc = new RTCPeerConnection({ iceServers: payload.relay ? all : withoutRelay(all) });
           const entry = { pc, pending: [], from };
           receiving.current = entry;
           pc.onicecandidate = ({ candidate }) => candidate && send(from, 'ice', candidate);
           pc.ontrack = ({ streams }) => streams[0] && setRemoteStream(streams[0]);
-          await pc.setRemoteDescription(payload);
+          await pc.setRemoteDescription({ type: payload.type, sdp: payload.sdp });
           for (const c of entry.pending.splice(0)) await pc.addIceCandidate(c).catch(() => {});
           await pc.setLocalDescription(await pc.createAnswer());
           send(from, 'answer', pc.localDescription);

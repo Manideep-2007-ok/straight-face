@@ -13,6 +13,7 @@ export function useWebRTC({ socketRef, me, members, enabled, epoch = 0 }) {
   const [hasTurn, setHasTurn] = useState(false);
   const [tick, setTick] = useState(0); // bumped to make the "connect to everyone" step run again
   const attempts = useRef(new Map()); // userId -> automatic rebuilds so far
+  const relayMode = useRef(new Set()); // people we could not reach directly: their calls may use the relay server
   const peers = useRef(new Map());
   const iceRef = useRef(null);
   const streamRef = useRef(null);
@@ -66,7 +67,7 @@ export function useWebRTC({ socketRef, me, members, enabled, epoch = 0 }) {
   // Throw a call away so a fresh one is built. `notify` tells the other person to do the same: a new call cannot
   // be matched with the old one on the other side (the encryption keys differ).
   const resetPeer = useCallback(
-    (id, notify = false) => {
+    (id, notify = false, relay = false) => {
       const p = peers.current.get(id);
       if (p) {
         p.pc.onconnectionstatechange = null;
@@ -77,19 +78,21 @@ export function useWebRTC({ socketRef, me, members, enabled, epoch = 0 }) {
         const { [id]: _gone, ...rest } = r;
         return rest;
       });
-      if (notify) socketRef.current?.emit('rtc:signal', { to: id, type: 'reset' });
+      if (notify) socketRef.current?.emit('rtc:signal', { to: id, type: 'reset', payload: { relay } });
       setTick((t) => t + 1);
     },
     [socketRef],
   );
 
-  // Rebuild a broken call by itself, a few times, with a growing pause.
+  // Rebuild a broken call by itself, a few times. The first attempt is always DIRECT (no relay server, so a direct path
+  // is never beaten by a faster relay path); if that did not work, the rebuilt call may use the relay server.
   const recover = useCallback(
-    (id) => {
+    (id, escalate = false) => {
       const n = attempts.current.get(id) || 0;
-      if (n >= 3) return;
+      if (n >= 4) return;
       attempts.current.set(id, n + 1);
-      setTimeout(() => peers.current.has(id) && resetPeer(id, true), 1500 * (n + 1));
+      if (escalate && iceRef.current?.hasTurn) relayMode.current.add(id);
+      setTimeout(() => peers.current.has(id) && resetPeer(id, true, relayMode.current.has(id)), n === 0 ? 300 : 1500 * n);
     },
     [resetPeer],
   );
@@ -106,13 +109,18 @@ export function useWebRTC({ socketRef, me, members, enabled, epoch = 0 }) {
         setHasTurn(!!iceRef.current.hasTurn);
       }
       if (peers.current.has(id)) return peers.current.get(id);
-      const pc = new RTCPeerConnection({ iceServers: iceRef.current.iceServers });
+      // Direct first: leave the relay server out until a direct path has been tried and failed. Otherwise the relay,
+      // which answers very fast, can win the race and be locked in even though a direct path exists.
+      const isTurn = (srv) => (Array.isArray(srv.urls) ? srv.urls : [srv.urls]).some((u) => /^turns?:/i.test(u));
+      const useRelay = relayMode.current.has(id);
+      const pc = new RTCPeerConnection({ iceServers: useRelay ? iceRef.current.iceServers : iceRef.current.iceServers.filter((srv) => !isTurn(srv)) });
       const peer = { pc, polite: me.userId > id, makingOffer: false, ignoreOffer: false, pending: [], since: Date.now(), local: {}, remote: {} };
       const kind = (c) => (/\.local /.test(c) ? 'mdns' : /typ (\w+)/.exec(c)?.[1] || 'other') + (/ tcp /i.test(c) ? '-tcp' : '');
       peer.kind = kind;
       diag(id, 'start', {
         role: me.userId > id ? 'answerer' : 'offerer',
         turn: !!iceRef.current?.hasTurn,
+        relayAllowed: useRelay,
         net: navigator.connection?.type || navigator.connection?.effectiveType || 'unknown',
         brave: !!navigator.brave,
         ua: navigator.userAgent.replace(/\(([^)]*)\)/, (m, g) => `(${g.split(';').slice(0, 2).join(';')})`).slice(0, 110),
@@ -175,7 +183,7 @@ export function useWebRTC({ socketRef, me, members, enabled, epoch = 0 }) {
             rep.forEach((r) => r.type === 'candidate-pair' && (pairs[r.state] = (pairs[r.state] || 0) + 1));
             diag(id, 'failed: candidate pairs by state', pairs);
           }).catch(() => {});
-          recover(id);
+          recover(id, true);
         } else if (s === 'disconnected') setPeerState(id, { state: 'reconnecting' });
         else setPeerState(id, { state: 'connecting' });
       };
@@ -195,6 +203,7 @@ export function useWebRTC({ socketRef, me, members, enabled, epoch = 0 }) {
   const handleSignal = useCallback(
     async ({ from, type, payload }) => {
       if (type === 'reset') {
+        if (payload?.relay) relayMode.current.add(from); // they could not connect directly, so use the relay too
         resetPeer(from, false); // the other side threw its call away; build a new one with them
         return;
       }
@@ -258,29 +267,30 @@ export function useWebRTC({ socketRef, me, members, enabled, epoch = 0 }) {
 
   // After WE reconnected, every call we had is dead: start all of them again.
   useEffect(() => {
-    if (epoch > 1) [...peers.current.keys()].forEach((id) => resetPeer(id, false));
+    if (epoch > 1) {
+      relayMode.current.clear(); // maybe on a different network now: try direct first again
+      [...peers.current.keys()].forEach((id) => resetPeer(id, false));
+    }
   }, [epoch, resetPeer]);
 
-  // Watchdog: a call stuck "disconnected" for 8 s, or never getting connected for 25 s, is rebuilt.
+  // Watchdog (every 2 s): a direct call still not connected after ~6 s is rebuilt WITH the relay; one stuck "disconnected"
+  // for 8 s, or a dead one, is rebuilt too.
   useEffect(() => {
     const t = setInterval(() => {
       peers.current.forEach((p, id) => {
         const age = Date.now() - p.since;
         const s = p.pc.connectionState;
         const dead = s === 'closed' || p.pc.signalingState === 'closed'; // e.g. a phone browser suspended the tab
-        if (dead || (s === 'disconnected' && age > 8000) || ((s === 'new' || s === 'connecting') && age > 25000)) {
+        const direct = !relayMode.current.has(id);
+        const slow = (s === 'new' || s === 'connecting') && age > (direct ? (p.polite ? 9000 : 6000) : 25000);
+        if (dead || slow || (s === 'disconnected' && age > 8000)) {
           p.since = Date.now();
-          recover(id);
+          recover(id, true);
         }
       });
-    }, 5000);
+    }, 2000);
     return () => clearInterval(t);
   }, [recover]);
-
-  useEffect(() => {
-    if (!readyRef.current || !queueRef.current.length) return;
-    queueRef.current.splice(0).forEach(process);
-  }, [media, process]);
 
   // 3. Connect to everyone who is here, drop everyone who left.
   useEffect(() => {

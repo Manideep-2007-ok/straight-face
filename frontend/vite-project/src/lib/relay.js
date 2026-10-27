@@ -35,3 +35,6 @@ export async function limitSenders(pc, limits) {
     await sender.setParameters(params).catch(() => {});
   }
 }
+
+// The same servers without the relay (TURN) ones. Calls start with these so a direct path is never beaten by a relay path.
+export const withoutRelay = (servers) => servers.filter((srv) => !(Array.isArray(srv.urls) ? srv.urls : [srv.urls]).some((u) => /^turns?:/i.test(u)));

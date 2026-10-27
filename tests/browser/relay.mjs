@@ -1,4 +1,5 @@
-// FORCE_RELAY=0 runs the same call over a direct path, to compare how much data each uses.
+// Modes:  (default) only the relay is allowed;  FORCE_RELAY=0 direct is allowed and must be used, with NO relay traffic;
+//         BLOCK_DIRECT=1 direct paths are made to fail, so the call has to fall back to the relay by itself.
 // Forces both browsers to use ONLY the relay (TURN) server, like two devices that cannot reach each other directly,
 // and checks that the call still connects and video flows, over a path of type "relay".
 //   APP=https://your-site PLAYWRIGHT_FROM=... CHROMIUM=... node tests/browser/relay.mjs
@@ -10,11 +11,15 @@ const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || 
   args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream', '--no-sandbox'] });
 async function user(email) {
   const ctx = await browser.newContext({ permissions: ['camera', 'microphone'] });
-  await ctx.addInitScript(`window.__forceRelay = ${process.env.FORCE_RELAY !== '0'};`);
+  await ctx.addInitScript(`window.__forceRelay = ${process.env.FORCE_RELAY !== '0' && process.env.BLOCK_DIRECT !== '1'}; window.__blockDirect = ${process.env.BLOCK_DIRECT === '1'};`);
   await ctx.addInitScript(() => {
     const O = window.RTCPeerConnection; window.__pcs = [];
     window.RTCPeerConnection = function (cfg = {}, ...r) { const pc = new O(window.__forceRelay ? { ...cfg, iceTransportPolicy: 'relay' } : cfg, ...r); window.__pcs.push(pc); return pc; };
     window.RTCPeerConnection.prototype = O.prototype;
+    if (window.__blockDirect) { // pretend every direct path is blocked: only relay candidates from the other side are accepted
+      const add = O.prototype.addIceCandidate;
+      O.prototype.addIceCandidate = function (c) { return c && c.candidate && !/ typ relay /.test(c.candidate) ? Promise.resolve() : add.call(this, c); };
+    }
   });
   const page = await ctx.newPage();
   await page.goto(`${APP}/login`); await page.fill('#email', email); await page.fill('#password', 'demo1234');
@@ -37,7 +42,7 @@ const path = (p) => p.evaluate(async () => {
   return null;
 });
 let ok = false, pa, pb;
-for (let i = 0; i < 60 && !ok; i++) {
+for (let i = 0; i < 90 && !ok; i++) {
   await new Promise((r) => setTimeout(r, 1000));
   pa = await path(a); pb = await path(b);
   ok = !!pa && !!pb;
@@ -56,7 +61,12 @@ console.log(`mode: ${process.env.FORCE_RELAY === '0' ? 'direct' : 'relay only'};
 console.log(`=> about ${(kbps * 2 * 3600 / 8 / 1000).toFixed(0)} MB per hour of a 2-person call (both directions)`);
 if (process.env.FORCE_RELAY !== '0' && kbps > 300) { console.log('FAIL: the relayed call is using too much data'); await browser.close(); process.exit(1); }
 const viaRelay = ok && (pa.local === 'relay' || pa.remote === 'relay') && (pb.local === 'relay' || pb.remote === 'relay');
-if (process.env.FORCE_RELAY === '0') { console.log('direct run finished'); await browser.close(); process.exit(0); }
+if (process.env.FORCE_RELAY === '0') {
+  const direct = ok && pa.local !== 'relay' && pa.remote !== 'relay' && pb.local !== 'relay' && pb.remote !== 'relay';
+  console.log(direct ? 'PASS: connected directly and used no relay' : 'FAIL: a direct connection was available but the relay was used');
+  await browser.close();
+  process.exit(direct ? 0 : 1);
+}
 console.log(viaRelay ? 'PASS: connected, through the relay, at a low data rate' : 'FAIL: did not connect through the relay');
 await browser.close();
 process.exit(viaRelay ? 0 : 1);
