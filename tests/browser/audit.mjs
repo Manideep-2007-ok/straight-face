@@ -68,6 +68,21 @@ async function login(page, email, password = 'demo1234') {
   await page.click('button:has-text("Log in")');
 }
 
+let freshN = 0;
+// A brand-new account, signed up through the UI. (One account can only be logged in on one device at a time, so tests
+// that need several browsers at once use separate accounts.)
+async function signupFresh(page, label = 'p') {
+  freshN++;
+  const email = `ui-tester-${label}${freshN}-${stamp}@example.com`;
+  await page.goto(`${APP}/signup`);
+  await page.fill('#name', 'Fresh Tester');
+  await page.fill('#email', email);
+  await page.fill('#password', 'testpass-9876');
+  await page.click('button:has-text("Create account")');
+  await page.waitForURL('**/home');
+  return email;
+}
+
 // ---------------------------------------------------------------- logged out
 const anon = await newUser('anon');
 const a = anon.page;
@@ -228,11 +243,8 @@ await step('room full: a 5th person is told the room is full', async () => {
     ok(ack.ok, `seat refused: ${JSON.stringify(ack)}`);
     seats.push(s);
   };
-  for (const email of ['arjun@demo.test', 'meera@demo.test']) {
-    const res = await fetch(`${API}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password: 'demo1234' }) });
-    await take(res.headers.getSetCookie().map((c) => c.split(';')[0]).join('; '));
-  }
-  for (let i = 0; i < 2; i++) {
+  // Seats are taken by brand-new accounts: logging into a demo account here would sign out that account's browser.
+  for (let i = 0; i < 4; i++) {
     const res = await fetch(`${API}/api/auth/signup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: `Seat ${i}`, email: `ui-tester-seat${i}-${stamp}@example.com`, password: 'testpass-9876' }) });
     await take(res.headers.getSetCookie().map((c) => c.split(';')[0]).join('; '));
   }
@@ -490,13 +502,48 @@ await step('recap: a person who is not in the room cannot read it', async () => 
   ok(/not a member/i.test(await f.locator('[role=alert]').innerText()));
 });
 
+// ---------------------------------------------------------------- one login per account
+await step('opening the same account on a second device signs the first one out immediately (even inside a room)', async () => {
+  const one = await newUser('device-1');
+  const email = await signupFresh(one.page, 'single');
+  await one.page.fill('#rname', 'Single login');
+  await one.page.click('button:has-text("Create room")');
+  await one.page.waitForURL(/\/room\/[A-Z2-9]{6}$/);
+  await one.page.click('button:has-text("Join the party")');
+  await one.page.waitForSelector('.tile');
+  const two = await newUser('device-2');
+  await login(two.page, email, 'testpass-9876');
+  await two.page.waitForURL('**/home');
+  await one.page.waitForURL('**/login', { timeout: 15000 });
+  await one.page.waitForSelector('[role=alert]:has-text("another device")', { timeout: 5000 });
+  ok(two.page.url().endsWith('/home'), 'the new device must stay logged in');
+  await two.page.reload(); // and it really is still logged in on the server
+  await two.page.waitForSelector('h1:has-text("Hi,")', { timeout: 10000 });
+  await one.ctx.close();
+  await two.ctx.close();
+});
+await step('a signed-out device cannot use its old login on the API either', async () => {
+  const one = await newUser('device-3');
+  const email = await signupFresh(one.page, 'api');
+  const two = await newUser('device-4');
+  await login(two.page, email, 'testpass-9876');
+  await two.page.waitForURL('**/home');
+  // Call the API the way the page does: through its own address when that forwards /api, otherwise straight to the backend.
+  const status = await one.page.evaluate(async (api) => {
+    const proxied = await fetch('/health').then((r) => r.json()).then((j) => j.ok === true).catch(() => false);
+    return (await fetch(`${proxied ? '' : api}/api/rooms/mine`, { credentials: 'include' })).status;
+  }, API);
+  ok(status === 401, `old login still worked (status ${status})`);
+  await one.ctx.close();
+  await two.ctx.close();
+});
+
 // ---------------------------------------------------------------- phone widths and accessibility
 for (const [name, url] of [['landing', '/'], ['login', '/login'], ['home', '/home'], ['recap', '/room/PARTY2/recap']]) {
   await step(`phone width (375px): ${name} has no sideways overflow`, async () => {
     const m = await newUser(`m-${name}`, { width: 375, height: 812 });
-    await login(m.page, 'riya@demo.test');
-    await m.page.waitForURL('**/home');
-    await m.page.goto(`${APP}${url}`);
+    await signupFresh(m.page, 'phone');
+    await m.page.goto(`${APP}${url === '/room/PARTY2/recap' ? '/home' : url}`);
     await wait(1200);
     const o = await m.page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
     ok(o.sw <= o.iw + 1, `scrollWidth ${o.sw} > ${o.iw}`);
@@ -506,8 +553,7 @@ for (const [name, url] of [['landing', '/'], ['login', '/login'], ['home', '/hom
 }
 await step('phone width (375px): the room page has no sideways overflow', async () => {
   const m = await newUser('m-room', { width: 375, height: 812 });
-  await login(m.page, 'riya@demo.test');
-  await m.page.waitForURL('**/home');
+  await signupFresh(m.page, 'phoneroom');
   await m.page.goto(`${APP}/room/${code}`);
   await m.page.click('button:has-text("Join the party")');
   await wait(2500);

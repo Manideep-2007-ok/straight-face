@@ -160,5 +160,20 @@ const nextP = got(gs[0], 'play:state');
 const nx = await gs[1].emitWithAck('queue:next');
 check('play top-voted video for everyone', nx.ok === true && (await nextP).videoId === nx.videoId, nx.videoId);
 
+// ---- One login per account
+const dupEmail = `e2e-${stamp}-single@example.com`;
+const su = await fetch(`${BASE}/api/auth/signup`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Single', email: dupEmail, password: 'password123' }) });
+const firstCookie = su.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+const firstSock = await connect(firstCookie);
+const replaced = new Promise((r) => firstSock.once('session:replaced', () => r(true)));
+const gone = new Promise((r) => firstSock.once('disconnect', () => r(true)));
+const second = await fetch(`${BASE}/api/auth/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: dupEmail, password: 'password123' }) });
+const secondCookie = second.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+check('first device is told it was replaced and is disconnected', (await Promise.race([replaced, wait(3000).then(() => false)])) && (await Promise.race([gone, wait(3000).then(() => false)])));
+const oldMe = await api('/api/auth/me', firstCookie);
+check('old login gets 401 SESSION_REPLACED from the API', oldMe.status === 401 && oldMe.json.error.code === 'SESSION_REPLACED', oldMe.json.error?.code);
+check('new login still works', (await api('/api/auth/me', secondCookie)).status === 200);
+check('a socket with the old login is refused', (await connect(firstCookie).then(() => 'connected', (e) => e.message)) === 'session_replaced');
+
 console.log(failed ? `\n${failed} check(s) FAILED` : '\nAll checks passed');
 process.exit(failed ? 1 : 0);
