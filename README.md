@@ -175,6 +175,7 @@ cd frontend/vite-project && npm test
 # browser tests: need Playwright and a Chromium binary (see the header of each file)
 PLAYWRIGHT_FROM=/dir/with/node_modules/ CHROMIUM=/usr/bin/chromium node tests/browser/webrtc.mjs ./out   # two-person call
 PLAYWRIGHT_FROM=... CHROMIUM=... node tests/browser/audit.mjs ./out                                         # every page and button
+MEDIA=/dir/with/clips PLAYWRIGHT_FROM=... CHROMIUM=... node tests/browser/fit.mjs ./out                      # shared videos of any shape fit the stage
 APP=https://your-site PLAYWRIGHT_FROM=... CHROMIUM=... node tests/browser/relay.mjs                         # a call forced through the relay only
 MEDIA=/dir/with/clip.mp4-and-"my song.mp3" PLAYWRIGHT_FROM=... CHROMIUM=... node tests/browser/share.mjs ./out  # screen, video file and MP3 sharing
 ```
