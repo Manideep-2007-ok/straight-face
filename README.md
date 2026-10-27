@@ -6,7 +6,7 @@ Up to four friends watch the same YouTube video in sync, talk on voice and video
 
 - Live app: https://straight-face-web.onrender.com (the first visit after a quiet period can take about a minute while the free servers wake up)
 - Code: https://github.com/Manideep-2007-ok/straight-face
-- Demo video: _add the link after recording_
+- Demo video (2:32, voiceover; cameras show FER2013 training photos): [docs/demo/StraightFace_demo.mp4](https://github.com/Manideep-2007-ok/straight-face/blob/main/docs/demo/StraightFace_demo.mp4)
 
 ## Problem statement
 
