@@ -175,6 +175,7 @@ cd frontend/vite-project && npm test
 # browser tests: need Playwright and a Chromium binary (see the header of each file)
 PLAYWRIGHT_FROM=/dir/with/node_modules/ CHROMIUM=/usr/bin/chromium node tests/browser/webrtc.mjs ./out   # two-person call
 PLAYWRIGHT_FROM=... CHROMIUM=... node tests/browser/audit.mjs ./out                                         # every page and button
+APP=https://your-site PLAYWRIGHT_FROM=... CHROMIUM=... node tests/browser/relay.mjs                         # a call forced through the relay only
 MEDIA=/dir/with/clip.mp4-and-"my song.mp3" PLAYWRIGHT_FROM=... CHROMIUM=... node tests/browser/share.mjs ./out  # screen, video file and MP3 sharing
 ```
 
@@ -229,7 +230,7 @@ Render does not redeploy automatically for a public repo that was added by addre
 1. Create a free account at https://www.metered.ca (the free plan includes a relay allowance) and open its TURN section. Alternatively Cloudflare's Realtime TURN service has a free tier.
 2. Copy the TURN address(es), the username and the credential it gives you.
 3. On the Render backend service (`straight-face-api`) set `TURN_URL` (several addresses can be separated by commas, for example `turn:global.relay.metered.ca:80,turn:global.relay.metered.ca:443?transport=tcp,turns:global.relay.metered.ca:443?transport=tcp`), `TURN_USERNAME` and `TURN_CREDENTIAL`, then deploy.
-The app hands these to logged-in users through `GET /api/rtc/ice`, so they never appear in the page's code. Until a relay is set, a tile that cannot connect says so after about 12 seconds and explains why.
+The app hands these to logged-in users through `GET /api/rtc/ice`, so they never appear in the page's code. The deployed backend uses Metered's free relay (credentials are Render environment variables, not in the code). Calls try a direct path first and only use the relay when a direct path is impossible, so most of the time no relay traffic is used. Media is end-to-end encrypted (DTLS-SRTP), so the relay carries it but cannot read it. The free plan has a monthly data allowance, so heavy use could run it out. Without a relay set, a tile that cannot connect says so after about 12 seconds and explains why.
 
 **What a failed call looks like in the logs.** Each browser reports how a call is going to the server log as `[rtc] Name -> Name: ...`: its role, whether it is Brave, the connection type, and how many network paths of each kind it found (`host` = the device's own address, `srflx` = its address as seen from outside, `relay` = through a TURN server), then the result. If both sides report paths, exchange all of them, and still end in `ice disconnected` then `connection failed`, the two devices cannot reach each other directly (different networks, or Wi-Fi that isolates devices) and a TURN relay is the fix. Only counts and types are logged, never addresses.
 
@@ -242,7 +243,7 @@ Open the live address on a phone using mobile data to check calls across network
 - Mesh calls are capped at 4 people.
 - The game is client-reported (see above).
 - Live room state is in memory, so a server restart ends live parties. Saved chat, reactions and rounds are kept. Scaling to several servers would need the Socket.IO Redis adapter.
-- Without a TURN relay, calls can fail between strict networks.
+- The free relay has a monthly allowance. If it runs out, calls between strict networks fail again (same-network calls are unaffected).
 
 ## Credits
 
