@@ -21,6 +21,10 @@ async function request(path, { method = 'GET', body } = {}) {
   } catch {
     throw new ApiError(0, 'OFFLINE', 'Cannot reach the server. Check your connection and try again.');
   }
+  // Free hosting puts the server to sleep when idle; while it wakes up the page's server answers 502/503/504.
+  if ([502, 503, 504].includes(res.status)) {
+    throw new ApiError(res.status, 'WAKING', 'The server is waking up (free hosting sleeps when idle). Try again in about a minute.');
+  }
   const json = await res.json().catch(() => null);
   if (!res.ok) {
     if (res.status === 401 && json?.error?.code === 'SESSION_REPLACED') window.dispatchEvent(new Event('session-replaced'));

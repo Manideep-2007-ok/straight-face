@@ -8,12 +8,36 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [notice, setNotice] = useState('');
 
+  const [waking, setWaking] = useState(false); // the server is asleep and starting up
+
+  // Ask who is logged in. If the server is still waking up, keep trying (up to ~70 s) instead of deciding "logged out".
   useEffect(() => {
-    api
-      .me()
-      .then(setUser)
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
+    let dead = false;
+    (async () => {
+      for (let i = 0; i < 14 && !dead; i++) {
+        try {
+          const u = await api.me();
+          if (!dead) setUser(u);
+          break;
+        } catch (e) {
+          if (e.code === 'WAKING' || e.code === 'OFFLINE') {
+            if (!dead) setWaking(true);
+            // eslint-disable-next-line no-await-in-loop
+            await new Promise((r) => setTimeout(r, 5000));
+          } else {
+            if (!dead) setUser(null);
+            break;
+          }
+        }
+      }
+      if (!dead) {
+        setWaking(false);
+        setLoading(false);
+      }
+    })();
+    return () => {
+      dead = true;
+    };
   }, []);
 
   // The same account was opened on another device: this one is signed out straight away.
@@ -39,7 +63,7 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
-  return <AuthContext.Provider value={{ user, loading, notice, login, signup, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, loading, waking, notice, login, signup, logout }}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => useContext(AuthContext);

@@ -8,9 +8,15 @@ import Recap from './pages/Recap.jsx';
 import UpdateBanner from './components/UpdateBanner.jsx';
 
 function Protected({ children }) {
-  const { user, loading } = useAuth();
+  const { user, loading, waking } = useAuth();
   const location = useLocation();
-  if (loading) return <div className="center-screen muted" role="status">Loading…</div>;
+  if (loading) {
+    return (
+      <div className="center-screen muted" role="status" style={{ textAlign: 'center' }}>
+        {waking ? 'Waking up the server. Free hosting sleeps when idle, so this can take up to a minute…' : 'Loading…'}
+      </div>
+    );
+  }
   if (!user) return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   return children;
 }
