@@ -62,7 +62,7 @@ export default function Tile({ name, stream, isMe, state, camOff, micOff, out, n
         <span className="tile-note" role="status">
           Can't connect yet.{' '}
           {noRelay
-            ? "If you are on different networks (a phone on mobile data and a laptop on Wi-Fi), a relay server is needed and none is set up. The same Wi-Fi works."
+            ? "These two devices cannot reach each other directly. This happens on different networks, and also on Wi-Fi that blocks devices from talking to each other (guest, college or hostel Wi-Fi). A relay server fixes it and none is set up yet. A phone hotspot works."
             : "Check that the other person's camera and network are working."}
         </span>
       )}

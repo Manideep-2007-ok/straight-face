@@ -231,6 +231,8 @@ Render does not redeploy automatically for a public repo that was added by addre
 3. On the Render backend service (`straight-face-api`) set `TURN_URL` (several addresses can be separated by commas, for example `turn:global.relay.metered.ca:80,turn:global.relay.metered.ca:443?transport=tcp,turns:global.relay.metered.ca:443?transport=tcp`), `TURN_USERNAME` and `TURN_CREDENTIAL`, then deploy.
 The app hands these to logged-in users through `GET /api/rtc/ice`, so they never appear in the page's code. Until a relay is set, a tile that cannot connect says so after about 12 seconds and explains why.
 
+**What a failed call looks like in the logs.** Each browser reports how a call is going to the server log as `[rtc] Name -> Name: ...`: its role, whether it is Brave, the connection type, and how many network paths of each kind it found (`host` = the device's own address, `srflx` = its address as seen from outside, `relay` = through a TURN server), then the result. If both sides report paths, exchange all of them, and still end in `ice disconnected` then `connection failed`, the two devices cannot reach each other directly (different networks, or Wi-Fi that isolates devices) and a TURN relay is the fix. Only counts and types are logged, never addresses.
+
 Open the live address on a phone using mobile data to check calls across networks. Without a TURN relay, calls between strict networks can fail.
 
 ## Known limits
