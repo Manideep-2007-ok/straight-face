@@ -57,7 +57,7 @@ export const ChatMessage = model('ChatMessage', chatSchema);
 const reactionSchema = new Schema({
   sessionId: { type: Types.ObjectId, ref: 'PartySession', required: true },
   userId: { type: Types.ObjectId, ref: 'User' },
-  kind: { type: String, enum: ['laugh', 'smile', 'surprise', 'emoji'], required: true },
+  kind: { type: String, enum: ['laugh', 'smile', 'surprise', 'angry', 'disgust', 'emoji'], required: true },
   emoji: String,
   videoId: String,
   t: { type: Number, required: true },

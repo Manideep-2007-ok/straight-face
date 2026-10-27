@@ -316,7 +316,7 @@ export function attachSockets(httpServer, config, registry) {
     on('react:emoji', ({ emoji, auto, strength }, reply) => {
       if (!needRoom(reply)) return;
       const L = getLive(code);
-      const kind = emoji === '😮' || emoji === '😱' ? 'surprise' : emoji === '😂' ? 'laugh' : emoji === '😄' ? 'smile' : 'emoji';
+      const kind = emoji === '😮' || emoji === '😱' ? 'surprise' : emoji === '😂' ? 'laugh' : emoji === '😄' ? 'smile' : emoji === '😠' ? 'angry' : emoji === '🤢' ? 'disgust' : 'emoji';
       const t = expectedPosition(L.playback, Date.now());
       io.to(code).emit('react:new', { userId: socket.user.userId, name: socket.user.name, emoji, auto: !!auto, id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}` });
       if (L.sessionId) {
