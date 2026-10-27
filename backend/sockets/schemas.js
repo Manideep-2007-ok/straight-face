@@ -31,6 +31,8 @@ export const schemas = {
   'queue:next': z.any(),
   'chat:send': z.object({ text: z.string().trim().min(1).max(500) }).strict(),
   'rtc:signal': z
-    .object({ to: z.string().min(1).max(40), type: z.enum(['offer', 'answer', 'ice']), payload: z.any() })
+    .object({ to: z.string().min(1).max(40), type: z.enum(['offer', 'answer', 'ice']), payload: z.any(), channel: z.enum(['cam', 'screen']).optional() })
     .strict(),
+  'share:start': z.object({ kind: z.enum(['screen', 'file']), label: z.string().trim().max(120).optional() }).strict(),
+  'share:stop': z.any(),
 };

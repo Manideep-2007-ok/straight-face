@@ -21,7 +21,7 @@ export function attachSockets(httpServer, config, registry) {
   const live = new Map();
   const getLive = (code) => {
     if (!live.has(code)) {
-      live.set(code, { playback: initialPlayback(null), toggles: new Map(), sessionId: null, chat: [], recent: [], round: dl.idleRound(), queue: [], events: [], radar: new Map(), lastLive: 0, roundStartedAt: null, roundTimer: null, thresholds: {} });
+      live.set(code, { playback: initialPlayback(null), toggles: new Map(), sessionId: null, chat: [], recent: [], round: dl.idleRound(), queue: [], share: null, events: [], radar: new Map(), lastLive: 0, roundStartedAt: null, roundTimer: null, thresholds: {} });
     }
     return live.get(code);
   };
@@ -109,9 +109,22 @@ export function attachSockets(httpServer, config, registry) {
     const members = () => registry.members(code).map((m) => ({ userId: m.userId, name: m.name }));
     const stampNow = () => Date.now();
 
+    // Ends the screen/file share (if it is mine or `force`) and pauses the room clock at where it had got to.
+    function endShare(c, force = false) {
+      const L = live.get(c);
+      if (!L?.share || (!force && L.share.userId !== socket.user.userId)) return false;
+      L.share = null;
+      const now = Date.now();
+      L.playback = { ...L.playback, position: expectedPosition(L.playback, now), status: 'paused', updatedAtServer: now, version: L.playback.version + 1 };
+      io.to(c).emit('share:state', null);
+      io.to(c).emit('play:state', L.playback);
+      return true;
+    }
+
     async function leave() {
       if (!code) return;
       const c = code;
+      endShare(c);
       code = null;
       socket.leave(c);
       if (registry.leave(c, socket.user.userId, socket.id)) {
@@ -123,7 +136,12 @@ export function attachSockets(httpServer, config, registry) {
         if (registry.memberCount(c) === 0) {
           await flush(c);
           const L = live.get(c);
-          if (L?.sessionId) await PartySession.updateOne({ _id: L.sessionId }, { endedAt: new Date() }).catch(() => {});
+          if (L?.sessionId) {
+            const q = { sessionId: L.sessionId };
+            const [hasChat, hasEvents, hasRounds] = await Promise.all([ChatMessage.exists(q), ReactionEvent.exists(q), GameRound.exists(q)]).catch(() => [true]);
+            if (!hasChat && !hasEvents && !hasRounds) await PartySession.deleteOne({ _id: L.sessionId }).catch(() => {}); // nothing happened: no recap needed
+            else await PartySession.updateOne({ _id: L.sessionId }, { endedAt: new Date() }).catch(() => {});
+          }
           clearTimeout(live.get(c)?.roundTimer);
           live.delete(c);
         }
@@ -161,6 +179,7 @@ export function attachSockets(httpServer, config, registry) {
         chat: L.recent.slice(-50),
         round: dl.publicView(L.round),
         queue: qu.publicQueue(L.queue),
+        share: L.share,
       });
     });
 
@@ -172,6 +191,7 @@ export function attachSockets(httpServer, config, registry) {
     const playHandler = (kind) => async (data, reply) => {
       if (!code) return reply({ error: 'NOT_IN_ROOM' });
       const L = getLive(code);
+      if (L.share) return reply({ error: 'SHARING', state: L.playback });
       const now = stampNow();
       const action =
         kind === 'set'
@@ -352,6 +372,7 @@ export function attachSockets(httpServer, config, registry) {
     on('queue:next', (_p, reply) => {
       if (!needRoom(reply)) return;
       const L = getLive(code);
+      if (L.share) return reply({ error: 'SHARING' });
       const { queue, next } = qu.popNext(L.queue);
       if (!next) return reply({ error: 'EMPTY' });
       L.queue = queue;
@@ -365,12 +386,31 @@ export function attachSockets(httpServer, config, registry) {
       reply({ ok: true, videoId: next.videoId });
     });
 
+    // One person at a time shares a tab/screen or a local video file. The room clock then counts seconds since the
+    // share began, so reactions and the recap still have a timeline.
+    on('share:start', ({ kind, label }, reply) => {
+      if (!needRoom(reply)) return;
+      const L = getLive(code);
+      if (L.share && L.share.userId !== socket.user.userId) return reply({ error: 'SOMEONE_SHARING', by: L.share.name });
+      const now = Date.now();
+      L.share = { userId: socket.user.userId, name: socket.user.name, kind, label: label || null };
+      L.playback = { videoId: 'screen-share', status: 'playing', position: 0, updatedAtServer: now, version: L.playback.version + 1, by: socket.user.userId, byName: socket.user.name };
+      io.to(code).emit('share:state', L.share);
+      io.to(code).emit('play:state', L.playback);
+      reply({ ok: true });
+    });
+
+    on('share:stop', (_p, reply) => {
+      if (!needRoom(reply)) return;
+      reply({ ok: endShare(code) });
+    });
+
     // Relay only to a member of the same room.
-    on('rtc:signal', ({ to, type, payload }, reply) => {
+    on('rtc:signal', ({ to, type, payload, channel }, reply) => {
       if (!code) return reply({ error: 'NOT_IN_ROOM' });
       const target = registry.members(code).find((m) => m.userId === to);
       if (!target) return reply({ error: 'NOT_FOUND' });
-      io.to(target.socketId).emit('rtc:signal', { from: socket.user.userId, type, payload });
+      io.to(target.socketId).emit('rtc:signal', { from: socket.user.userId, type, payload, channel: channel || 'cam' });
       reply({ ok: true });
     });
 
