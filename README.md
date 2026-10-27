@@ -32,9 +32,9 @@ Friends and classmates who watch things together while apart.
 | Sign up, log in, create room with a 6-letter code, join by code or link, max 4 | Built, tested live |
 | Synced YouTube playback, anyone can control, late joiners catch up, drift correction | Built, tested live |
 | Chat stamped with video time; hides later messages after a rewind | Built |
-| Voice and video mesh, mic and camera toggles, speaker ring, no-camera fallback | Built. Tested between two real browsers on one machine with fake cameras (`tests/browser/webrtc.mjs`, 36 of 37 runs connected). **Not yet tested on two physical devices or across networks.** |
-| Face reading (smile, surprise) with per-person calibration | Built. Tested on fake webcam video of FER2013 faces. **Not yet tested on a live person.** |
-| Don't Laugh round: calibrate, 5 s countdown, live, winner | Server rules fully tested. Played end to end in two real browsers with fake face videos: the smiling player was marked out and the other won. **Not yet played by real people.** |
+| Voice and video mesh, mic and camera toggles, speaker ring, no-camera fallback | Built. Calls try a direct path first and fall back to a relay server only when needed. Tested between real browsers with fake cameras (`tests/browser/webrtc.mjs`, `reconnect.mjs`, `relay.mjs`) and tried by the author on a real laptop and phone on one network. Between different networks it uses the relay, verified with a forced-relay test on the live site. |
+| Face reading (smile, surprise) with per-person calibration | Built. Tested on fake webcam video of FER2013 faces on the live site, and tried by the author on a real webcam. |
+| Don't Laugh round: calibrate, 5 s countdown, live, winner | Server rules fully tested. Played end to end on the live site in two real browsers with fake face videos: the smiling player was marked out and the other won, and "End round" gave a shared win. Also tried live by the author. |
 | Manual emoji and face-triggered emoji floating over the video | Built |
 | Reaction Radar heat strip, peaks, awards, past parties, sample party | Built, tested with seeded data |
 | Video queue with voting (most votes plays next) | Built, tested live |
@@ -159,7 +159,13 @@ Measured on this machine against a local server, so they show the code is not th
 | `GET /health` locally, 60 requests | p50 1.3 ms, p95 1.9 ms |
 | Live end-to-end check (`scripts/e2e.mjs`) | 36 checks pass: auth, room cap, sync, cooldown, chat, late join, signalling relay, full game round, queue and voting |
 
-_To fill in after deploying: the same load test and REST latency against the Render URL, and a note on cold start (about 50 s on the free tier)._
+**Against the deployed backend** (Render, Singapore; measured from a laptop over the internet, so these include the real network):
+
+| Check | Result | Target |
+|---|---|---|
+| Playback and event fan-out, 4 clients at 20 events/s for 30 s (`backend/scripts/loadtest.js`) | 598 events, 0 rejected, p50 95 ms, **p95 164 ms**, all 4 clients stayed connected | p95 under 200 ms |
+| `GET /api/rooms/mine`, 60 authenticated requests | p50 174 ms, **p95 187 ms** | p95 under 300 ms |
+| Cold start (free tier sleeps after about 15 minutes idle) | up to about a minute; the page shows "Waking up the server…" and keeps trying | best effort |
 
 ## Known bugs found by testing, and fixed
 
@@ -179,6 +185,21 @@ MEDIA=/dir/with/clips PLAYWRIGHT_FROM=... CHROMIUM=... node tests/browser/fit.mj
 APP=https://your-site PLAYWRIGHT_FROM=... CHROMIUM=... node tests/browser/relay.mjs                         # a call forced through the relay only
 MEDIA=/dir/with/clip.mp4-and-"my song.mp3" PLAYWRIGHT_FROM=... CHROMIUM=... node tests/browser/share.mjs ./out  # screen, video file and MP3 sharing
 ```
+
+## API reference
+
+All REST responses are JSON: success is `{ data, meta:{requestId} }`, errors are `{ error:{code,message}, meta:{requestId} }`. Every body is validated (zod) and unknown fields are rejected. Login is an `httpOnly` cookie.
+
+| Method and path | What it does |
+|---|---|
+| `POST /api/auth/signup`, `/login`, `/logout`, `GET /api/auth/me` | Accounts. Only failed attempts count towards the 10 per 15 minutes limit. A newer login signs the older device out (`401 SESSION_REPLACED`). |
+| `POST /api/rooms`, `GET /api/rooms/mine`, `GET /api/rooms/:code` | Create a room, list my rooms, look up a room by its 6-letter code. |
+| `GET /api/sessions?code=`, `GET /api/sessions/:id/recap` | Past parties of a room, and one party's recap (heat strip, peaks, awards, rounds). Members only (`403` otherwise). |
+| `GET /api/rtc/ice` | The servers browsers use to connect calls, including the relay if one is configured. Login required, so relay credentials are never in the page's code. |
+| `GET /health` | Liveness check. |
+
+**Live events (Socket.IO, authenticated by the same cookie, every payload validated and rate limited):**
+`room:join`, `room:leave`, `clock:ping` (clock sync); `play:set`, `play:seek` (shared playback); `queue:add`, `queue:vote`, `queue:next`; `chat:send`; `react:emoji`, `radar:sample`; `dl:start`, `dl:calibrated`, `dl:begin`, `dl:out`, `dl:stop`, `dl:cancel` (Don't Laugh); `share:start`, `share:stop` (screen and file sharing); `rtc:signal` (call setup, relayed only to members of the same room); `rtc:diag`, `face:diag` (counts only, for diagnosing calls and the face reader). The server sends back `room:members`, `play:state`, `chat:new`, `queue:state`, `dl:state`, `share:state`, `react:new`, `radar:live`, `rtc:reset` and `session:replaced`.
 
 ## Local setup
 
