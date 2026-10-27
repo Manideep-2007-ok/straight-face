@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { api } from '../lib/api.js';
+import { isRelayed, limitSenders, CAMERA_LIMITS } from '../lib/relay.js';
 
 // Full-mesh WebRTC using "perfect negotiation" so two people joining at once cannot deadlock.
 // media: 'idle' | 'asking' | 'live' | 'denied' | 'none'   (denied/none = watch + chat only)
@@ -156,6 +157,11 @@ export function useWebRTC({ socketRef, me, members, enabled, epoch = 0 }) {
         if (s === 'connected') {
           attempts.current.delete(id);
           setPeerState(id, { state: 'connected' });
+          // Through the relay server: send less data, because the relay's monthly allowance is small.
+          isRelayed(pc).then((relayed) => {
+            setPeerState(id, { relayed });
+            if (relayed) limitSenders(pc, CAMERA_LIMITS);
+          });
           // which kind of path was chosen (direct, via a STUN-found address, or relayed)
           pc.getStats().then((rep) => {
             let sel;

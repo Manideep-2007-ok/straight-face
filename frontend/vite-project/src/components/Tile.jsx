@@ -4,7 +4,7 @@ import { useSpeaking } from '../hooks/useSpeaking.js';
 // A person's tile: live video when we have it, otherwise their initial.
 // The picture is played muted and the sound goes through its own <audio> element: iPhones refuse to autoplay a video
 // that has sound, which would leave a black tile even though the call is connected.
-export default function Tile({ name, stream, isMe, state, camOff, micOff, out, noRelay, onRetry }) {
+export default function Tile({ name, stream, isMe, state, relayed, camOff, micOff, out, noRelay, onRetry }) {
   const vref = useRef(null);
   const aref = useRef(null);
   const [soundBlocked, setSoundBlocked] = useState(false);
@@ -56,6 +56,7 @@ export default function Tile({ name, stream, isMe, state, camOff, micOff, out, n
         {micOff && <span className="muted"> · muted</span>}
         {!isMe && state === 'connecting' && !stuck && <span className="muted"> · connecting…</span>}
         {!isMe && state === 'reconnecting' && <span className="muted"> · reconnecting…</span>}
+        {!isMe && state === 'connected' && relayed && <span className="muted" title="This call goes through a relay server, so it is sent at lower quality to save data."> · relayed, lower quality</span>}
         {!isMe && state === 'failed' && <span className="muted"> · connection failed</span>}
       </span>
       {!isMe && (stuck || state === 'failed') && (

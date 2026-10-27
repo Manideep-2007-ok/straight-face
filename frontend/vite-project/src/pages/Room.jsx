@@ -194,6 +194,7 @@ export default function Room() {
                 isMe={isMe}
                 stream={isMe ? rtc.localStream : rtc.remote[m.userId]?.stream}
                 state={rtc.remote[m.userId]?.state}
+                relayed={rtc.remote[m.userId]?.relayed}
                 camOff={isMe && !rtc.camOn}
                 micOff={isMe && !rtc.micOn}
                 out={rp ? !rp.alive : false}

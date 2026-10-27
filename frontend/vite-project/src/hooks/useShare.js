@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
+import { isRelayed, limitSenders, SHARE_LIMITS } from '../lib/relay.js';
 
 // Screen / tab / local-file sharing. One person shares at a time. The sharer opens a SEPARATE peer connection to
 // each other person (channel "screen"), always as the offerer, so it never collides with the camera calls.
@@ -51,6 +52,10 @@ export function useShare({ socketRef, me, members, share, emit }) {
         return;
       }
       pc.onicecandidate = ({ candidate }) => candidate && send(id, 'ice', candidate);
+      // A share that has to go through the relay server is sent at a lower quality (its monthly allowance is small).
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'connected') isRelayed(pc).then((relayed) => relayed && limitSenders(pc, SHARE_LIMITS));
+      };
       stream.getTracks().forEach((t) => pc.addTrack(t, stream));
       // cap the video bitrate so four people can share over a normal home upload
       pc.getSenders().forEach((snd) => {
