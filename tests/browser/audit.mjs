@@ -332,7 +332,7 @@ await step('chat: the Send button works too and the box clears', async () => {
   await j.fill('#msg', 'reply from arjun');
   await j.click('button:has-text("Send")');
   await r.waitForSelector('.messages li:has-text("reply from arjun")');
-  ok((await j.inputValue('#msg')) === '');
+  await j.waitForFunction(() => document.querySelector('#msg').value === '', null, { timeout: 5000 }); // clears once the server confirms
 });
 await step('chat: an empty message is not sent', async () => {
   const before = await r.locator('.messages li').count();

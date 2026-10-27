@@ -1,4 +1,5 @@
-export const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:4000').replace(/\/$/, '');
+// VITE_API_URL: the backend address, or "/" to use the same address as the page (the page's server forwards /api to the backend).
+export const API_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000').replace(/\/$/, '');
 
 export class ApiError extends Error {
   constructor(status, code, message) {

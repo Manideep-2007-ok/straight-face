@@ -23,7 +23,7 @@ export function useRoom(code) {
   const serverNow = useCallback(() => Date.now() + offsetRef.current, []);
 
   useEffect(() => {
-    const socket = io(API_URL, { withCredentials: true, transports: ['websocket', 'polling'] });
+    const socket = io(API_URL || undefined, { withCredentials: true, transports: ['websocket', 'polling'] });
     socketRef.current = socket;
 
     async function measureClock() {
