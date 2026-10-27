@@ -9,7 +9,7 @@ const config = parseConfig();
 await connectDb(config.dbURL, config.DB_NAME);
 
 if (process.argv.includes('--clean')) {
-  const gone = await User.deleteMany({ email: /^(e2e-|ui-tester-).*@example\.com$/ });
+  const gone = await User.deleteMany({ email: /^(e2e-|ui-tester-|load-).*@example\.com$/ });
   console.log(`Removed ${gone.deletedCount} test users.`);
 }
 
