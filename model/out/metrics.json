@@ -1,0 +1,57 @@
+{
+  "classes": [
+    "happy",
+    "surprise",
+    "neutral",
+    "other"
+  ],
+  "parameters": 303908,
+  "sizes": {
+    "train": 29068,
+    "val": 3230,
+    "test": 3589
+  },
+  "baseline_accuracy": 0.46475341320702146,
+  "best_epoch": 31,
+  "epochs_run": 37,
+  "val_accuracy_best": 0.6996904015541077,
+  "test_accuracy": 0.7046530842781067,
+  "test_recall": {
+    "happy": 0.8691695108077361,
+    "surprise": 0.8725961538461539,
+    "neutral": 0.829073482428115,
+    "other": 0.5293764988009593
+  },
+  "test_precision": {
+    "happy": 0.8404840484048405,
+    "surprise": 0.6060100166944908,
+    "neutral": 0.47702205882352944,
+    "other": 0.8892245720040282
+  },
+  "confusion_matrix": [
+    [
+      764,
+      33,
+      57,
+      25
+    ],
+    [
+      15,
+      363,
+      15,
+      23
+    ],
+    [
+      25,
+      20,
+      519,
+      62
+    ],
+    [
+      105,
+      183,
+      497,
+      883
+    ]
+  ]
+}
