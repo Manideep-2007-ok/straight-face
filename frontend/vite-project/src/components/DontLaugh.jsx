@@ -22,6 +22,7 @@ export default function DontLaugh({ round, me, media, localStream, serverNow, ge
   const { status, faceLost } = useFace({
     stream: localStream,
     active: faceActive,
+    onDiag: (event, info) => emit('face:diag', { event: `dont-laugh ${event}`, info }),
     onFrame: (f) => {
       if (phase === 'calibrating' && mine && !mine.calibrated && f.faceFound) {
         const c = calib.current;

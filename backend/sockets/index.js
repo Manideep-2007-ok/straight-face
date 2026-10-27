@@ -410,6 +410,13 @@ export function attachSockets(httpServer, config, registry) {
       reply({ ok: endShare(code) });
     });
 
+    // Face-reader diagnostics: whether the model started, and how often it finds a face. Numbers only, never images.
+    on('face:diag', ({ event, info }, reply) => {
+      if (!code) return reply({ error: 'NOT_IN_ROOM' });
+      console.log(`[face] ${socket.user.name}: ${event} ${info ? JSON.stringify(info).slice(0, 300) : ''}`);
+      reply({ ok: true });
+    });
+
     // Call diagnostics from the browser: how the connection to one other person is going. Candidate COUNTS and types only
     // (host / srflx / relay), never addresses. Shown in the server logs so a failing call can be understood.
     on('rtc:diag', ({ peer, event, info }, reply) => {

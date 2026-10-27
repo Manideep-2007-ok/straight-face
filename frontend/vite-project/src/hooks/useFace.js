@@ -8,11 +8,13 @@ export const engine = ENGINES[import.meta.env.VITE_EMOTION_ENGINE] || mediapipeE
 
 // Reads the local camera in this browser only. Calls onFrame({smile,surprise,faceFound}) ~8x/s while active.
 // status: off | loading | ready | error. faceLost turns true after 2 s without a face.
-export function useFace({ stream, active, onFrame }) {
+export function useFace({ stream, active, onFrame, onDiag }) {
   const [status, setStatus] = useState('off');
   const [faceLost, setFaceLost] = useState(false);
   const cb = useRef(onFrame);
   cb.current = onFrame;
+  const diag = useRef(onDiag);
+  diag.current = onDiag;
 
   useEffect(() => {
     if (!active || !stream || !stream.getVideoTracks().length) {
@@ -23,6 +25,14 @@ export function useFace({ stream, active, onFrame }) {
     let dead = false;
     let lastSeen = performance.now();
     setStatus('loading');
+    const t0 = performance.now();
+    const st = { frames: 0, found: 0, smileMax: 0, surpriseMax: 0 };
+    diag.current?.('loading', { engine: engine.name, tracks: stream.getVideoTracks().map((t) => t.getSettings?.().width + 'x' + t.getSettings?.().height) });
+    const summary = setInterval(() => {
+      if (!st.frames) return diag.current?.('no frames yet', { afterSec: Math.round((performance.now() - t0) / 1000) });
+      diag.current?.('summary', { frames: st.frames, facePct: Math.round((100 * st.found) / st.frames), smileMax: +st.smileMax.toFixed(2), surpriseMax: +st.surpriseMax.toFixed(2) });
+      st.frames = st.found = 0; st.smileMax = st.surpriseMax = 0;
+    }, 6000);
     const video = document.createElement('video');
     video.muted = true;
     video.playsInline = true;
@@ -31,7 +41,13 @@ export function useFace({ stream, active, onFrame }) {
 
     engine
       .start(video, (f) => {
-        if (f.faceFound) lastSeen = performance.now();
+        st.frames++;
+        if (f.faceFound) {
+          st.found++;
+          st.smileMax = Math.max(st.smileMax, f.smile);
+          st.surpriseMax = Math.max(st.surpriseMax, f.surprise);
+          lastSeen = performance.now();
+        }
         setFaceLost(performance.now() - lastSeen > 2000);
         cb.current(f);
       })
@@ -39,11 +55,17 @@ export function useFace({ stream, active, onFrame }) {
         if (dead) return s();
         stop = s;
         setStatus('ready');
+        diag.current?.('ready', { loadedInMs: Math.round(performance.now() - t0) });
       })
-      .catch(() => !dead && setStatus('error'));
+      .catch((e) => {
+        if (dead) return;
+        setStatus('error');
+        diag.current?.('ERROR', { name: e?.name, message: String(e?.message || e).slice(0, 160) });
+      });
 
     return () => {
       dead = true;
+      clearInterval(summary);
       stop?.();
       video.srcObject = null;
     };

@@ -43,6 +43,7 @@ export function FaceReactions({ enabled, paused, stream, emit, getPosition, onLe
   const { status } = useFace({
     stream,
     active: enabled && !paused,
+    onDiag: (event, info) => emit('face:diag', { event: `reactions ${event}`, info }),
     onFrame: (f) => {
       if (!f.faceFound) return;
       const now = performance.now();
