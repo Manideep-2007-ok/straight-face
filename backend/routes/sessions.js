@@ -7,8 +7,8 @@ import { ROOM_CODE_RE } from '../utils/roomCode.js';
 import { bucketHeat, topPeaks } from '../logic/heat.js';
 import { computeAwards } from '../logic/awards.js';
 
-const listQuery = z.object({ code: z.string().trim().toUpperCase().regex(ROOM_CODE_RE) });
-const idParams = z.object({ id: z.string().refine((v) => mongoose.isValidObjectId(v), 'Invalid id') });
+const listQuery = z.object({ code: z.string().trim().toUpperCase().regex(ROOM_CODE_RE, 'That is not a valid room code.') });
+const idParams = z.object({ id: z.string().refine((v) => mongoose.isValidObjectId(v), 'That is not a valid party id.') });
 
 export default function sessionRoutes(config) {
   const r = Router();
@@ -27,7 +27,16 @@ export default function sessionRoutes(config) {
       const room = await Room.findOne({ code: req.query.code }).lean();
       if (!room) throw new HttpError(404, 'NOT_FOUND', 'No room with that code.');
       await requireMember(req, room._id);
-      const sessions = await PartySession.find({ roomId: room._id }).sort({ startedAt: -1 }).limit(20).lean();
+      // Only list parties where something happened (chat, reactions or a game round), newest first.
+      const recent = await PartySession.find({ roomId: room._id }).sort({ startedAt: -1 }).limit(80).lean();
+      const withData = await Promise.all(
+        recent.map(async (s) => {
+          const q = { sessionId: s._id };
+          const [c, e, g] = await Promise.all([ChatMessage.exists(q), ReactionEvent.exists(q), GameRound.exists(q)]);
+          return c || e || g ? s : null;
+        }),
+      );
+      const sessions = withData.filter(Boolean).slice(0, 20);
       ok(req, res, sessions.map((s) => ({
         id: String(s._id), startedAt: s.startedAt, endedAt: s.endedAt, participants: s.participants.map((p) => p.name), sample: !!s.sample,
       })));
