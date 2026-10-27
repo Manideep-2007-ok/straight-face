@@ -4,7 +4,8 @@ A watch party where your face plays the game.
 
 Up to four friends watch the same YouTube video in sync, talk on voice and video, and chat. Anyone can play, pause or seek. Each person's browser reads their own face locally, and that powers a **Don't Laugh** game, floating **auto reactions**, and a **Reaction Radar** recap that shows the exact seconds the room cracked up.
 
-- Live app: _add the Vercel URL after deploying_
+- Live app: https://straight-face-web.onrender.com (the first visit after a quiet period can take about a minute while the free servers wake up)
+- Code: https://github.com/Manideep-2007-ok/straight-face
 - Demo video: _add the link after recording_
 
 ## Problem
@@ -207,16 +208,24 @@ Optional: `npm run seed` in `backend/` creates 3 demo users (password `demo1234`
 
 ## Deployment
 
-1. **Atlas**: free cluster, a database user, network access `0.0.0.0/0`.
-2. **Render** (backend): web service, root `backend`, build `npm install`, start `npm start`, health check `/health`. Set `dbURL`, `JWT_SECRET`, `CLIENT_URL` (the Vercel URL), `NODE_ENV=production`, and the TURN variables.
-3. **Vercel** (frontend): root `frontend/vite-project`, framework Vite, env `VITE_API_URL` set to the Render URL. `vercel.json` already contains the single-page-app rewrite.
-4. Open the live URL on a phone using mobile data to prove the TURN path works.
+Deployed on Render (free tier) with MongoDB Atlas. Two services:
 
-The MediaPipe model and wasm files are served from `frontend/vite-project/public/mediapipe/` so the demo does not depend on a CDN.
+| Service | Render settings |
+|---|---|
+| **Backend** `straight-face-api` | Node web service, build `cd backend && npm install`, start `cd backend && npm start`. Env: `dbURL`, `DB_NAME=straightface`, `JWT_SECRET`, `CLIENT_URL` (the frontend address), `NODE_ENV=production`, optional `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL`. |
+| **Frontend** `straight-face-web` | Node web service, build `cd frontend/vite-project && npm install --include=dev && npm run build`, start `cd frontend/vite-project && npx vite preview --host 0.0.0.0 --port $PORT`. Env: `VITE_API_URL=/`, `API_PROXY_TARGET` (the backend address), `VITE_EMOTION_ENGINE=mediapipe`. |
+
+**Why the frontend forwards the API.** The login cookie is set by the backend. If the page and the backend lived at different addresses, Safari, iPhones and some Chrome modes would block that cookie as a "third-party cookie" and nobody could stay logged in. So the frontend's server forwards `/api`, `/health` and the live socket (`/socket.io`) to the backend. The browser only talks to one address and the cookie is first-party. The backend still allows the frontend's address in `CLIENT_URL` (comma-separated if there are several), so pointing a different frontend straight at it (for example Vercel with `VITE_API_URL` set to the backend address) also works, with the cross-site cookie limitation.
+
+Atlas needs network access for Render (`0.0.0.0/0` for a project like this). The MediaPipe model and wasm files are served from `frontend/vite-project/public/mediapipe/` so the demo does not depend on a CDN.
+
+Render does not redeploy automatically for a public repo that was added by address, so trigger a deploy after pushing.
+
+Open the live address on a phone using mobile data to check calls across networks. Without a TURN relay, calls between strict networks can fail.
 
 ## Known limits
 
-- Safari may block the cross-site login cookie. Test on Chrome and Firefox.
+- The login cookie is first-party in the deployed setup (see Deployment). Pointing a separately hosted frontend straight at the backend would bring back the cross-site cookie problem on Safari.
 - Free-tier hosting has a cold start of about 50 s. Open the site once before a demo.
 - Mesh calls are capped at 4 people.
 - The game is client-reported (see above).
