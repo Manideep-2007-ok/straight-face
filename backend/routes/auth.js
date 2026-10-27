@@ -6,14 +6,17 @@ import { HttpError, ok, validate, signToken, authRequired, authLimiter } from '.
 
 const signupBody = z
   .object({
-    name: z.string().trim().min(1).max(40),
-    email: z.string().trim().toLowerCase().email(),
-    password: z.string().min(8).max(100),
+    name: z.string().trim().min(1, 'Enter your name.').max(40, 'Your name can be at most 40 characters.'),
+    email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
+    password: z.string().min(8, 'Your password must be at least 8 characters.').max(100, 'Your password can be at most 100 characters.'),
   })
   .strict();
 
 const loginBody = z
-  .object({ email: z.string().trim().toLowerCase().email(), password: z.string().min(1).max(100) })
+  .object({
+    email: z.string().trim().toLowerCase().email('Enter a valid email address.'),
+    password: z.string().min(1, 'Enter your password.').max(100),
+  })
   .strict();
 
 const publicUser = (u) => ({ id: String(u._id), name: u.name, email: u.email });

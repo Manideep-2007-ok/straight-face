@@ -25,7 +25,9 @@ export const validate = (schemas) => (req, res, next) => {
     if (!schemas[part]) continue;
     const r = schemas[part].safeParse(req[part]);
     if (!r.success) {
-      return next(new HttpError(400, 'VALIDATION', 'Some fields are not valid.', r.error.flatten()));
+      // Use the first specific message so the person sees what to fix (e.g. "Your password must be at least 8 characters.").
+      const first = r.error.issues.find((i) => i.message && !/^Invalid input|^Unrecognized key/i.test(i.message));
+      return next(new HttpError(400, 'VALIDATION', first?.message || 'Some fields are not valid.', r.error.flatten()));
     }
     // Express 5 makes req.query a getter, so define the parsed value instead of assigning.
     Object.defineProperty(req, part, { value: r.data, writable: true, configurable: true, enumerable: true });

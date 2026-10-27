@@ -4,8 +4,8 @@ import { Room } from '../models/index.js';
 import { HttpError, ok, validate, authRequired } from '../middleware/index.js';
 import { generateRoomCode, ROOM_CODE_RE } from '../utils/roomCode.js';
 
-const createBody = z.object({ name: z.string().trim().min(1).max(60) }).strict();
-const codeParams = z.object({ code: z.string().trim().toUpperCase().regex(ROOM_CODE_RE) });
+const createBody = z.object({ name: z.string().trim().min(1, 'Give the room a name.').max(60, 'The room name can be at most 60 characters.') }).strict();
+const codeParams = z.object({ code: z.string().trim().toUpperCase().regex(ROOM_CODE_RE, 'That is not a valid room code.') });
 
 export default function roomRoutes(config, registry) {
   const r = Router();
