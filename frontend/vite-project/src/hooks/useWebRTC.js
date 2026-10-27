@@ -93,6 +93,9 @@ export function useWebRTC({ socketRef, me, members, enabled, epoch = 0 }) {
     [resetPeer],
   );
 
+  // Tell the server how a call is going (counts and types of network paths only, never addresses).
+  const diag = useCallback((id, event, info) => socketRef.current?.emit('rtc:diag', { peer: id, event, ...(info ? { info } : {}) }), [socketRef]);
+
   const ensurePeer = useCallback(
     async (id) => {
       if (peers.current.get(id)?.pc.signalingState === 'closed') peers.current.delete(id);
@@ -103,7 +106,16 @@ export function useWebRTC({ socketRef, me, members, enabled, epoch = 0 }) {
       }
       if (peers.current.has(id)) return peers.current.get(id);
       const pc = new RTCPeerConnection({ iceServers: iceRef.current.iceServers });
-      const peer = { pc, polite: me.userId > id, makingOffer: false, ignoreOffer: false, pending: [], since: Date.now() };
+      const peer = { pc, polite: me.userId > id, makingOffer: false, ignoreOffer: false, pending: [], since: Date.now(), local: {}, remote: {} };
+      const kind = (c) => (/\.local /.test(c) ? 'mdns' : /typ (\w+)/.exec(c)?.[1] || 'other') + (/ tcp /i.test(c) ? '-tcp' : '');
+      peer.kind = kind;
+      diag(id, 'start', {
+        role: me.userId > id ? 'answerer' : 'offerer',
+        turn: !!iceRef.current?.hasTurn,
+        net: navigator.connection?.type || navigator.connection?.effectiveType || 'unknown',
+        brave: !!navigator.brave,
+        ua: navigator.userAgent.replace(/\(([^)]*)\)/, (m, g) => `(${g.split(';').slice(0, 2).join(';')})`).slice(0, 110),
+      });
       peers.current.set(id, peer);
       setPeerState(id, { state: 'connecting' });
 
@@ -115,7 +127,13 @@ export function useWebRTC({ socketRef, me, members, enabled, epoch = 0 }) {
       }
 
       pc.ontrack = ({ streams }) => setPeerState(id, { stream: streams[0] });
-      pc.onicecandidate = ({ candidate }) => candidate && send(id, 'ice', candidate);
+      pc.onicecandidate = ({ candidate }) => {
+        if (!candidate) return diag(id, 'gathering done', { local: peer.local });
+        const k = kind(candidate.candidate);
+        peer.local[k] = (peer.local[k] || 0) + 1;
+        send(id, 'ice', candidate);
+      };
+      pc.oniceconnectionstatechange = () => diag(id, `ice ${pc.iceConnectionState}`, { local: peer.local, remote: peer.remote });
       pc.onnegotiationneeded = async () => {
         // One side of each pair (the lower user id) makes every offer; the other only answers.
         // Two simultaneous offers force a rollback, and in Chromium a rolled-back connection can get stuck
@@ -134,18 +152,30 @@ export function useWebRTC({ socketRef, me, members, enabled, epoch = 0 }) {
       pc.onconnectionstatechange = () => {
         const s = pc.connectionState;
         peer.since = Date.now();
+        diag(id, `connection ${s}`, { local: peer.local, remote: peer.remote });
         if (s === 'connected') {
           attempts.current.delete(id);
           setPeerState(id, { state: 'connected' });
+          // which kind of path was chosen (direct, via a STUN-found address, or relayed)
+          pc.getStats().then((rep) => {
+            let sel;
+            rep.forEach((r) => r.type === 'transport' && r.selectedCandidatePairId && (sel = rep.get(r.selectedCandidatePairId)));
+            if (sel) diag(id, 'path', { local: rep.get(sel.localCandidateId)?.candidateType, remote: rep.get(sel.remoteCandidateId)?.candidateType, proto: rep.get(sel.localCandidateId)?.protocol });
+          }).catch(() => {});
         } else if (s === 'failed') {
           setPeerState(id, { state: 'failed' });
+          pc.getStats().then((rep) => {
+            const pairs = {};
+            rep.forEach((r) => r.type === 'candidate-pair' && (pairs[r.state] = (pairs[r.state] || 0) + 1));
+            diag(id, 'failed: candidate pairs by state', pairs);
+          }).catch(() => {});
           recover(id);
         } else if (s === 'disconnected') setPeerState(id, { state: 'reconnecting' });
         else setPeerState(id, { state: 'connecting' });
       };
       return peer;
     },
-    [me, send, setPeerState, recover],
+    [me, send, setPeerState, recover, diag],
   );
 
   // 2. Incoming signalling. Messages that arrive before our camera state is settled (still at the join gate,
@@ -166,6 +196,8 @@ export function useWebRTC({ socketRef, me, members, enabled, epoch = 0 }) {
       const { pc } = peer;
       try {
         if (type === 'ice') {
+          const k = peer.kind?.(payload?.candidate || '') || 'other';
+          peer.remote[k] = (peer.remote[k] || 0) + 1;
           // A candidate can beat the description it belongs to; hold it until the remote description is set.
           if (!pc.remoteDescription) {
             peer.pending.push(payload);

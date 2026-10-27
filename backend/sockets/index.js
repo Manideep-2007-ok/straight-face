@@ -410,6 +410,15 @@ export function attachSockets(httpServer, config, registry) {
       reply({ ok: endShare(code) });
     });
 
+    // Call diagnostics from the browser: how the connection to one other person is going. Candidate COUNTS and types only
+    // (host / srflx / relay), never addresses. Shown in the server logs so a failing call can be understood.
+    on('rtc:diag', ({ peer, event, info }, reply) => {
+      if (!code) return reply({ error: 'NOT_IN_ROOM' });
+      const other = registry.members(code).find((m) => m.userId === peer)?.name || '?';
+      console.log(`[rtc] ${socket.user.name} -> ${other}: ${event} ${info ? JSON.stringify(info).slice(0, 400) : ''}`);
+      reply({ ok: true });
+    });
+
     // Relay only to a member of the same room.
     on('rtc:signal', ({ to, type, payload, channel }, reply) => {
       if (!code) return reply({ error: 'NOT_IN_ROOM' });

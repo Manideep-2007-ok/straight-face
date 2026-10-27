@@ -33,6 +33,7 @@ export const schemas = {
   'rtc:signal': z
     .object({ to: z.string().min(1).max(40), type: z.enum(['offer', 'answer', 'ice', 'reset']), payload: z.any(), channel: z.enum(['cam', 'screen']).optional() })
     .strict(),
+  'rtc:diag': z.object({ peer: z.string().max(40), event: z.string().max(60), info: z.any().optional() }).strict(),
   'share:start': z.object({ kind: z.enum(['screen', 'file']), label: z.string().trim().max(120).optional() }).strict(),
   'share:stop': z.any(),
 };
