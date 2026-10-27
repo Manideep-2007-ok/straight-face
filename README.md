@@ -90,6 +90,10 @@ uv pip install --python .venv/bin/python numpy pandas pyarrow pillow scikit-lear
 .venv/bin/python -I export.py    # writes the browser files
 ```
 
+## One login per account
+
+Each login makes a new session id, and only the newest one is valid. Opening the same account on a second device signs the first device out immediately: its REST calls get `401 SESSION_REPLACED`, its live connection is closed, and the page returns to the login screen with an explanation. This keeps one person from being in a room twice. Test accounts that need several browsers at once therefore use separate accounts.
+
 ## Privacy
 
 - No video, audio or image is recorded, stored, or sent to our server. The camera is read in your browser.
@@ -202,7 +206,7 @@ Optional: `npm run seed` in `backend/` creates 3 demo users (password `demo1234`
 | `JWT_SECRET` | backend | Secret for login tokens, 16+ characters |
 | `CLIENT_URL` | backend | Frontend URL, no trailing slash. Used for CORS and cookies |
 | `NODE_ENV` | backend | `production` on Render. Turns on secure cross-site cookies |
-| `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` | backend | Optional TURN relay. Served to logged-in users by `GET /api/rtc/ice` so they never sit in the frontend bundle |
+| `TURN_URL`, `TURN_USERNAME`, `TURN_CREDENTIAL` | backend | Optional TURN relay (see Deployment). Served to logged-in users by `GET /api/rtc/ice` so they never sit in the frontend bundle |
 | `VITE_API_URL` | frontend | Backend URL |
 | `VITE_EMOTION_ENGINE` | frontend | `mediapipe` (default) or `custom` (the CNN in `/model`) |
 
@@ -220,6 +224,12 @@ Deployed on Render (free tier) with MongoDB Atlas. Two services:
 Atlas needs network access for Render (`0.0.0.0/0` for a project like this). The MediaPipe model and wasm files are served from `frontend/vite-project/public/mediapipe/` so the demo does not depend on a CDN.
 
 Render does not redeploy automatically for a public repo that was added by address, so trigger a deploy after pushing.
+
+**Setting up a relay (TURN) server, so people on different networks can see each other.** Calls go straight between browsers, which works on the same Wi-Fi and on most home networks. A phone on mobile data talking to a laptop on Wi-Fi usually needs a relay, and the free public relays that used to exist without an account (such as `openrelay.metered.ca`) have been shut down, so you need your own free account:
+1. Create a free account at https://www.metered.ca (the free plan includes a relay allowance) and open its TURN section. Alternatively Cloudflare's Realtime TURN service has a free tier.
+2. Copy the TURN address(es), the username and the credential it gives you.
+3. On the Render backend service (`straight-face-api`) set `TURN_URL` (several addresses can be separated by commas, for example `turn:global.relay.metered.ca:80,turn:global.relay.metered.ca:443?transport=tcp,turns:global.relay.metered.ca:443?transport=tcp`), `TURN_USERNAME` and `TURN_CREDENTIAL`, then deploy.
+The app hands these to logged-in users through `GET /api/rtc/ice`, so they never appear in the page's code. Until a relay is set, a tile that cannot connect says so after about 12 seconds and explains why.
 
 Open the live address on a phone using mobile data to check calls across networks. Without a TURN relay, calls between strict networks can fail.
 
