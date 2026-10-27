@@ -6,11 +6,11 @@ Up to four friends watch the same YouTube video in sync, talk on voice and video
 
 - Live app: https://straight-face-web.onrender.com (the first visit after a quiet period can take about a minute while the free servers wake up)
 - Code: https://github.com/Manideep-2007-ok/straight-face
-- Demo video (2:32, voiceover; the cameras show FER2013 training photos): watch below, or [open the file](https://github.com/Manideep-2007-ok/straight-face/blob/main/docs/demo/StraightFace_demo.mp4)
+- Demo video (2:32, voiceover; the cameras show FER2013 training photos), playing below:
 
-<video src="https://github.com/Manideep-2007-ok/straight-face/raw/main/docs/demo/StraightFace_demo.mp4" controls playsinline width="100%">
-  Your viewer cannot play embedded video. <a href="https://github.com/Manideep-2007-ok/straight-face/blob/main/docs/demo/StraightFace_demo.mp4">Open the demo video</a>.
-</video>
+https://github.com/user-attachments/assets/27beb662-eea7-4672-9006-34ca0b2823c8
+
+Backup copy in the repo: [docs/demo/StraightFace_demo.mp4](https://github.com/Manideep-2007-ok/straight-face/blob/main/docs/demo/StraightFace_demo.mp4)
 
 ## Problem statement
 
