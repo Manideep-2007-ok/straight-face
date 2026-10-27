@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
+import crypto from 'node:crypto';
 import { User } from '../models/index.js';
+import { startSession } from '../state/sessionBus.js';
 import { HttpError, ok, validate, signToken, authRequired, authLimiter } from '../middleware/index.js';
 
 const signupBody = z
@@ -37,7 +39,9 @@ export default function authRoutes(config) {
         throw new HttpError(409, 'EMAIL_TAKEN', 'An account with that email already exists.');
       }
       const user = await User.create({ name, email, passwordHash: await bcrypt.hash(password, 10) });
-      res.cookie('token', signToken(user._id, config.JWT_SECRET), cookieOpts);
+      const sid = crypto.randomUUID();
+      await startSession(user._id, sid);
+      res.cookie('token', signToken(user._id, config.JWT_SECRET, sid), cookieOpts);
       ok(req, res, publicUser(user), 201);
     } catch (e) {
       next(e);
@@ -50,7 +54,9 @@ export default function authRoutes(config) {
       const user = await User.findOne({ email });
       const good = user && (await bcrypt.compare(password, user.passwordHash));
       if (!good) throw new HttpError(401, 'BAD_LOGIN', 'Wrong email or password');
-      res.cookie('token', signToken(user._id, config.JWT_SECRET), cookieOpts);
+      const sid = crypto.randomUUID();
+      await startSession(user._id, sid); // signs out every other device
+      res.cookie('token', signToken(user._id, config.JWT_SECRET, sid), cookieOpts);
       ok(req, res, publicUser(user));
     } catch (e) {
       next(e);

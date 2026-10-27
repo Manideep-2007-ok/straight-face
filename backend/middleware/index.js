@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import rateLimit from 'express-rate-limit';
+import { currentSid } from '../state/sessionBus.js';
 
 export class HttpError extends Error {
   constructor(status, code, message, details) {
@@ -35,22 +36,33 @@ export const validate = (schemas) => (req, res, next) => {
   next();
 };
 
-export function signToken(userId, secret) {
-  return jwt.sign({ sub: String(userId) }, secret, { expiresIn: '7d' });
+export function signToken(userId, secret, sid) {
+  return jwt.sign({ sub: String(userId), sid }, secret, { expiresIn: '7d' });
 }
 
+// Returns { userId, sid } or null.
 export function verifyToken(token, secret) {
   try {
-    return jwt.verify(token, secret).sub;
+    const p = jwt.verify(token, secret);
+    return p.sid ? { userId: p.sub, sid: p.sid } : null; // tokens without a session id are from before one-login-per-account
   } catch {
     return null;
   }
 }
 
-export const authRequired = (config) => (req, res, next) => {
-  const userId = verifyToken(req.cookies?.token, config.JWT_SECRET);
-  if (!userId) return next(new HttpError(401, 'UNAUTHENTICATED', 'Please log in.'));
-  req.userId = userId;
+// True when this token belongs to the account's newest login.
+export async function sessionIsCurrent({ userId, sid }) {
+  return (await currentSid(userId)) === sid;
+}
+
+export const authRequired = (config) => async (req, res, next) => {
+  const t = verifyToken(req.cookies?.token, config.JWT_SECRET);
+  if (!t) return next(new HttpError(401, 'UNAUTHENTICATED', 'Please log in.'));
+  if (!(await sessionIsCurrent(t))) {
+    res.clearCookie('token', { httpOnly: true, sameSite: config.isProd ? 'none' : 'lax', secure: config.isProd });
+    return next(new HttpError(401, 'SESSION_REPLACED', 'You were signed out because this account was opened on another device.'));
+  }
+  req.userId = t.userId;
   next();
 };
 

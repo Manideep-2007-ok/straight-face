@@ -9,6 +9,7 @@ export const User = model(
       name: { type: String, required: true, trim: true, maxlength: 40 },
       email: { type: String, required: true, unique: true, lowercase: true, trim: true },
       passwordHash: { type: String, required: true },
+      sessionId: { type: String }, // the one valid login for this account
     },
     { timestamps: { createdAt: true, updatedAt: false } },
   ),
